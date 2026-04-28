@@ -51,7 +51,9 @@ internal sealed record UsgsGeometry
     [JsonPropertyName("coordinates")]
     public double[] Coordinates { get; init; } = [];
 
-    public double? Depth => Coordinates.Length >= 3 ? Coordinates[2] : null;
+    public double? Depth     => Coordinates.Length >= 3 ? Coordinates[2] : null;
+    public double? Longitude => Coordinates.Length >= 2 ? Coordinates[0] : null;
+    public double? Latitude  => Coordinates.Length >= 2 ? Coordinates[1] : null;
 }
 
 // ── Domain model ──────────────────────────────────────────────────────────────
@@ -66,4 +68,6 @@ internal sealed record QuakeEvent
     public double?  DepthKm        { get; init; }
     public bool     TsunamiWarning { get; init; }
     public string   EventType      { get; init; } = "";
+    public double?  Latitude       { get; init; }
+    public double?  Longitude      { get; init; }
 }

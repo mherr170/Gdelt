@@ -1,6 +1,6 @@
 namespace GdeltSearchUI;
 
-internal partial class GasPriceForm
+internal partial class DebtForm
 {
     private Panel BuildToolbar()
     {
@@ -26,9 +26,9 @@ internal partial class GasPriceForm
         accountBtn.Click += (_, _) =>
         {
             using var dlg = new SettingsDialog(
-                CredentialManager.LoadGasPriceBluesky,
-                CredentialManager.SaveGasPriceBluesky,
-                "Bluesky Account — Gas Prices");
+                CredentialManager.LoadDebtBluesky,
+                CredentialManager.SaveDebtBluesky,
+                "Bluesky Account — National Debt");
             dlg.ShowDialog(this);
         };
 
@@ -36,7 +36,7 @@ internal partial class GasPriceForm
         {
             Text = "Post",
             Dock = DockStyle.Right,
-            Width = 140,
+            Width = 150,
             BackColor = DarkTheme.PostButtonDefault,
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
@@ -61,7 +61,7 @@ internal partial class GasPriceForm
 
         var heading = new Label
         {
-            Text = "EIA Weekly Retail Pump Prices",
+            Text = "US Treasury — Debt to the Penny",
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = DarkTheme.TextMuted,
@@ -69,7 +69,6 @@ internal partial class GasPriceForm
             Font = new Font("Segoe UI", 8.5f),
         };
 
-        // Right-docked controls added in reverse visual order
         bar.Controls.Add(accountBtn);
         bar.Controls.Add(_postButton);
         bar.Controls.Add(_refreshButton);
@@ -77,7 +76,7 @@ internal partial class GasPriceForm
         return bar;
     }
 
-    private Panel BuildPricePanel()
+    private Panel BuildDebtPanel()
     {
         var table = new TableLayoutPanel
         {
@@ -87,25 +86,25 @@ internal partial class GasPriceForm
             Padding = new Padding(24, 12, 24, 12),
             BackColor = DarkTheme.Background,
         };
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
-        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
+        table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
         for (var i = 0; i < 4; i++)
             table.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
 
-        (_regularLabel,  _regularDelta)  = AddPriceRow(table, 0, "Regular");
-        (_midGradeLabel, _midGradeDelta) = AddPriceRow(table, 1, "Mid-Grade");
-        (_premiumLabel,  _premiumDelta)  = AddPriceRow(table, 2, "Premium");
-        (_dieselLabel,   _dieselDelta)   = AddPriceRow(table, 3, "Diesel");
+        (_totalLabel,    _totalDelta)    = AddRow(table, 0, "Total Public Debt");
+        (_publicLabel,   _publicDelta)   = AddRow(table, 1, "Held by Public");
+        (_intragovLabel, _intragovDelta) = AddRow(table, 2, "Intragov Holdings");
+        (_percentLabel,  _percentDelta)  = AddRow(table, 3, "Day-over-Day %");
 
         return table;
     }
 
-    private static (Label value, Label delta) AddPriceRow(TableLayoutPanel table, int row, string fuelType)
+    private static (Label value, Label delta) AddRow(TableLayoutPanel table, int row, string fieldName)
     {
         table.Controls.Add(new Label
         {
-            Text = fuelType,
+            Text = fieldName,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = DarkTheme.TextMuted,

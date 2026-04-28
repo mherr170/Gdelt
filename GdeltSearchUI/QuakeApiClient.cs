@@ -48,10 +48,48 @@ internal sealed class QuakeApiClient : IDisposable
                 DepthKm        = f.Geometry?.Depth,
                 TsunamiWarning = f.Properties.Tsunami > 0,
                 EventType      = f.Properties.Type,
+                Latitude       = f.Geometry?.Latitude,
+                Longitude      = f.Geometry?.Longitude,
             })
             .ToList();
 
         return (events, null);
+    }
+
+    public async Task<List<QuakeEvent>> GetNearbyAsync(
+        double latitude, double longitude, double radiusKm, int hours,
+        double minMagnitude, CancellationToken ct = default)
+    {
+        var start = DateTime.UtcNow.AddHours(-hours).ToString("yyyy-MM-ddTHH:mm:ss");
+        var url = $"{BaseUrl}?format=geojson" +
+                  $"&latitude={latitude:F4}&longitude={longitude:F4}&maxradiuskm={radiusKm:F0}" +
+                  $"&minmagnitude={minMagnitude}&starttime={start}&orderby=time&limit=200";
+
+        try
+        {
+            var response = await _http.GetAsync(url, ct);
+            if (!response.IsSuccessStatusCode) return [];
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            var parsed = JsonSerializer.Deserialize<UsgsFeatureCollection>(json);
+
+            return (parsed?.Features ?? [])
+                .Where(f => f.Properties != null && f.Geometry?.Latitude.HasValue == true)
+                .Select(f => new QuakeEvent
+                {
+                    Id             = f.Id,
+                    Magnitude      = f.Properties!.Magnitude ?? 0,
+                    Place          = f.Properties.Place,
+                    UtcTime        = f.Properties.UtcTime,
+                    DepthKm        = f.Geometry?.Depth,
+                    TsunamiWarning = f.Properties.Tsunami > 0,
+                    Latitude       = f.Geometry?.Latitude,
+                    Longitude      = f.Geometry?.Longitude,
+                })
+                .ToList();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { return []; }
     }
 
     public void Dispose() => _http.Dispose();

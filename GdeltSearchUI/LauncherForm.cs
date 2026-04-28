@@ -7,6 +7,10 @@ internal sealed class LauncherForm : Form
         ("USGunV", "shooting"),
     ];
 
+    private Button _gasPriceBtn   = null!;
+    private Button _debtBtn       = null!;
+    private Button _commodityBtn  = null!;
+
     public LauncherForm()
     {
         Text = "GDELT Launcher";
@@ -20,6 +24,32 @@ internal sealed class LauncherForm : Form
 
         Controls.Add(BuildButtonGrid());
         Controls.Add(BuildHeader());
+
+        RefreshGasPriceButton();
+        RefreshDebtButton();
+        RefreshCommodityButton();
+        Activated += (_, _) => { RefreshGasPriceButton(); RefreshDebtButton(); RefreshCommodityButton(); };
+    }
+
+    private void RefreshGasPriceButton()
+    {
+        var posted = GasPricePostTracker.IsCurrentWeekPosted();
+        _gasPriceBtn.Text      = posted ? "✓ US Gas $" : "⚠ US Gas $";
+        _gasPriceBtn.BackColor = posted ? Color.FromArgb(0x2E, 0x6E, 0x3E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshDebtButton()
+    {
+        var posted = DebtPostTracker.IsTodayPosted();
+        _debtBtn.Text      = posted ? "✓ US Debt" : "⚠ US Debt";
+        _debtBtn.BackColor = posted ? Color.FromArgb(0x2E, 0x6E, 0x3E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshCommodityButton()
+    {
+        var posted = CommodityPostTracker.IsRecentlyPosted();
+        _commodityBtn.Text      = posted ? "✓ Energy $" : "⚠ Energy $";
+        _commodityBtn.BackColor = posted ? Color.FromArgb(0x2E, 0x6E, 0x3E) : Color.FromArgb(0xB8, 0x76, 0x0B);
     }
 
     private static Label BuildHeader()
@@ -52,8 +82,34 @@ internal sealed class LauncherForm : Form
 
         panel.Controls.Add(MakeGasPriceButton());
         panel.Controls.Add(MakeQuakeButton());
+        panel.Controls.Add(MakeDebtButton());
+        panel.Controls.Add(MakeCommodityButton());
 
         return panel;
+    }
+
+    private Button MakeDebtButton()
+    {
+        _debtBtn = MakeButton("US Debt", Color.FromArgb(0x6A, 0x4C, 0x93));
+        _debtBtn.Click += (_, _) =>
+        {
+            var form = new DebtForm();
+            form.FormClosed += (_, _) => RefreshDebtButton();
+            form.Show();
+        };
+        return _debtBtn;
+    }
+
+    private Button MakeCommodityButton()
+    {
+        _commodityBtn = MakeButton("Energy $", Color.FromArgb(0x1A, 0x6B, 0x7A));
+        _commodityBtn.Click += (_, _) =>
+        {
+            var form = new CommodityForm();
+            form.FormClosed += (_, _) => RefreshCommodityButton();
+            form.Show();
+        };
+        return _commodityBtn;
     }
 
     private Button MakeSearchButton(string label, string query)
@@ -65,9 +121,14 @@ internal sealed class LauncherForm : Form
 
     private Button MakeGasPriceButton()
     {
-        var btn = MakeButton("US Gas $", Color.FromArgb(0x4A, 0x7C, 0x3F));
-        btn.Click += (_, _) => new GasPriceForm().Show();
-        return btn;
+        _gasPriceBtn = MakeButton("US Gas $", Color.FromArgb(0x4A, 0x7C, 0x3F));
+        _gasPriceBtn.Click += (_, _) =>
+        {
+            var form = new GasPriceForm();
+            form.FormClosed += (_, _) => RefreshGasPriceButton();
+            form.Show();
+        };
+        return _gasPriceBtn;
     }
 
     private Button MakeQuakeButton()

@@ -24,6 +24,9 @@ internal sealed record EiaDataPoint
     [JsonPropertyName("product")]
     public string Product { get; init; } = "";
 
+    [JsonPropertyName("series")]
+    public string Series { get; init; } = "";
+
     [JsonPropertyName("value")]
     public string? Value { get; init; }
 }
@@ -37,6 +40,10 @@ internal sealed record NationalGasPrices
     public double? Premium  { get; init; }
     public double? Diesel   { get; init; }
     public string  Period   { get; init; } = "";
+
+    public NationalGasPrices? Previous { get; init; }
+    public NationalGasPrices? YearAgo  { get; init; }
+    public IReadOnlyList<NationalGasPrices> History { get; init; } = [];
 
     public string? ErrorMessage { get; init; }
     public bool IsSuccess => ErrorMessage is null;

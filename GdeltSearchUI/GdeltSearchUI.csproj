@@ -11,4 +11,9 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="ScottPlot.WinForms" Version="5.1.58" />
+    <PackageReference Include="SkiaSharp" Version="3.119.0" />
+  </ItemGroup>
+
 </Project>

@@ -22,6 +22,12 @@ internal static class DarkTheme
     internal static readonly Color ToneNeg      = Color.FromArgb(0xF4, 0x87, 0x71); // salmon
     internal static readonly Color TonePos      = Color.FromArgb(0x4E, 0xC9, 0xB0); // teal
 
+    // ── Delta / post-button semantics ─────────────────────────────────────────
+    internal static readonly Color DeltaUp          = Color.FromArgb(0xE5, 0x4B, 0x4B); // red  — price rose
+    internal static readonly Color DeltaDown        = Color.FromArgb(0x4F, 0xB5, 0x6E); // green — price fell
+    internal static readonly Color PostButtonDefault = Color.FromArgb(0x1D, 0x83, 0xBD); // blue  — not yet posted
+    internal static readonly Color PostButtonPosted  = Color.FromArgb(0x2E, 0x6E, 0x3E); // green — already posted
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     internal static void ApplyToContextMenu(ContextMenuStrip menu)

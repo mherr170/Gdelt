@@ -23,11 +23,41 @@ internal partial class QuakeForm
 
         var (headline, body, tags) = await LmStudioPostGenerator.GenerateQuakePostAsync(quake);
 
-        SetStatus("Posting to Bluesky…");
-
         var text = BuildPostText(quake, headline, body, tags);
-        var (ok, error) = await _poster.PostTextAsync(
-            creds.Value.Handle, creds.Value.Password, text, CancellationToken.None);
+
+        (bool ok, string? error) result;
+        if (quake.Latitude.HasValue && quake.Longitude.HasValue)
+        {
+            SetStatus("Fetching nearby quakes for context map…");
+            List<QuakeEvent> nearby;
+            using (var client = new QuakeApiClient())
+            {
+                nearby = await client.GetNearbyAsync(
+                    quake.Latitude.Value, quake.Longitude.Value,
+                    radiusKm: 500, hours: 24, minMagnitude: 3.0);
+            }
+
+            SetStatus("Rendering regional map and posting to Bluesky…");
+            var png = await QuakeMap.RenderPngAsync(quake, nearby);
+            if (png.Length > 0)
+            {
+                var alt = BuildMapAltText(quake, nearby);
+                result = await _poster.PostTextWithImageAsync(
+                    creds.Value.Handle, creds.Value.Password, text, png, alt, CancellationToken.None);
+            }
+            else
+            {
+                result = await _poster.PostTextAsync(
+                    creds.Value.Handle, creds.Value.Password, text, CancellationToken.None);
+            }
+        }
+        else
+        {
+            SetStatus("Posting to Bluesky (text only — no coordinates)…");
+            result = await _poster.PostTextAsync(
+                creds.Value.Handle, creds.Value.Password, text, CancellationToken.None);
+        }
+        var (ok, error) = result;
 
         if (ok)
             SetStatus($"Posted to Bluesky at {DateTime.Now:HH:mm}.");
@@ -66,6 +96,27 @@ internal partial class QuakeForm
         }
 
         return headline + bodyBlock + dataBlock + tagLine;
+    }
+
+    private static string BuildMapAltText(QuakeEvent epicenter, IReadOnlyList<QuakeEvent> nearby)
+    {
+        var others = nearby.Where(q => q.Id != epicenter.Id).ToList();
+        var depth  = epicenter.DepthKm.HasValue ? $"{epicenter.DepthKm.Value:F1} km" : "unknown depth";
+        var lat    = epicenter.Latitude.GetValueOrDefault();
+        var lon    = epicenter.Longitude.GetValueOrDefault();
+
+        var contextLine = others.Count == 0
+            ? "No other M3+ quakes in the surrounding 500 km in the past 24 hours."
+            : $"In the surrounding 500 km over the past 24 hours, " +
+              $"{others.Count} other M3+ quake{(others.Count == 1 ? "" : "s")} are shown as gray dots, " +
+              $"ranging from M{others.Min(q => q.Magnitude):F1} to M{others.Max(q => q.Magnitude):F1}.";
+
+        return
+            $"Regional context map showing the epicenter of an M{epicenter.Magnitude:F1} earthquake near " +
+            $"{epicenter.Place} at {lat:F2}°, {lon:F2}°, {depth}. " +
+            $"The epicenter is marked by a red circle in the center of the map. " +
+            contextLine + " " +
+            "Map tiles by CARTO using OpenStreetMap data. Earthquake data from USGS.";
     }
 
     private static int Graphemes(string s) =>

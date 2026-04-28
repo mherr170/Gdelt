@@ -5,10 +5,13 @@ namespace GdeltSearchUI;
 
 internal static class CredentialManager
 {
-    private const string BlueskyTarget         = "GdeltSearchUI/Bluesky";
-    private const string GasPriceBlueskyTarget = "GdeltSearchUI/GasPriceBluesky";
-    private const string QuakeBlueskyTarget    = "GdeltSearchUI/QuakeBluesky";
-    private const string EiaTarget             = "GdeltSearchUI/EIA";
+    private const string BlueskyTarget            = "GdeltSearchUI/Bluesky";
+    private const string GasPriceBlueskyTarget    = "GdeltSearchUI/GasPriceBluesky";
+    private const string QuakeBlueskyTarget        = "GdeltSearchUI/QuakeBluesky";
+    private const string DebtBlueskyTarget         = "GdeltSearchUI/DebtBluesky";
+    private const string CommodityBlueskyTarget    = "GdeltSearchUI/CommodityBluesky";
+    private const string EiaTarget                 = "GdeltSearchUI/EIA";
+    private const string ApiNinjasTarget           = "GdeltSearchUI/ApiNinjas";
     private const uint CRED_TYPE_GENERIC = 1;
     private const uint CRED_PERSIST_LOCAL_MACHINE = 2;
 
@@ -85,6 +88,30 @@ internal static class CredentialManager
 
     public static (string Handle, string Password)? LoadQuakeBluesky() =>
         LoadInternal(QuakeBlueskyTarget);
+
+    // ── Debt Bluesky ──────────────────────────────────────────────────────────
+
+    public static void SaveDebtBluesky(string handle, string password) =>
+        SaveInternal(DebtBlueskyTarget, handle, password);
+
+    public static (string Handle, string Password)? LoadDebtBluesky() =>
+        LoadInternal(DebtBlueskyTarget);
+
+    // ── Commodity Bluesky ─────────────────────────────────────────────────────
+
+    public static void SaveCommodityBluesky(string handle, string password) =>
+        SaveInternal(CommodityBlueskyTarget, handle, password);
+
+    public static (string Handle, string Password)? LoadCommodityBluesky() =>
+        LoadInternal(CommodityBlueskyTarget);
+
+    // ── API-Ninjas ─────────────────────────────────────────────────────────────
+
+    public static void SaveApiNinjasKey(string apiKey) =>
+        SaveInternal(ApiNinjasTarget, "apininjas", apiKey);
+
+    public static string? LoadApiNinjasKey() =>
+        LoadInternal(ApiNinjasTarget)?.Password;
 
     // ── EIA ───────────────────────────────────────────────────────────────────
 

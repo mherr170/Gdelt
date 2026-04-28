@@ -50,6 +50,87 @@ internal sealed class BlueskyPoster : IDisposable
         return (true, null);
     }
 
+    // Posts pre-built text together with a single attached image.
+    public async Task<(bool Ok, string? Error)> PostTextWithImageAsync(
+        string handle, string appPassword, string text,
+        byte[] imageBytes, string altText, CancellationToken ct)
+    {
+        var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
+        if (authError is not null) return (false, authError);
+
+        var si = new System.Globalization.StringInfo(text);
+        if (si.LengthInTextElements > MaxPostChars)
+            text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
+
+        // 1. Upload image as a blob.
+        using var blobReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.uploadBlob")
+        {
+            Content = new ByteArrayContent(imageBytes),
+        };
+        blobReq.Content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        blobReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+
+        var blobResp = await _http.SendAsync(blobReq, ct);
+        if (!blobResp.IsSuccessStatusCode)
+        {
+            var body = await blobResp.Content.ReadAsStringAsync(ct);
+            return (false, $"Image upload failed ({(int)blobResp.StatusCode}):\n{body}");
+        }
+        var blobJson = await blobResp.Content.ReadFromJsonAsync<UploadBlobResponse>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("Empty blob response.");
+
+        // 2. Create record with image embed.
+        var embed = new
+        {
+            type   = "app.bsky.embed.images",
+            images = new[]
+            {
+                new { alt = altText, image = blobJson.Blob },
+            },
+        };
+
+        var record = new Dictionary<string, object?>
+        {
+            ["$type"]     = "app.bsky.feed.post",
+            ["text"]      = text,
+            ["createdAt"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+            ["langs"]     = new[] { "en" },
+            ["facets"]    = new List<Facet>(),
+            ["embed"]     = new Dictionary<string, object?>
+            {
+                ["$type"]  = "app.bsky.embed.images",
+                ["images"] = new[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["alt"]   = altText,
+                        ["image"] = blobJson.Blob,
+                    },
+                },
+            },
+        };
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+        {
+            Content = JsonContent.Create(new
+            {
+                repo       = session.Did,
+                collection = "app.bsky.feed.post",
+                record,
+            }),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+
+        var postResp = await _http.SendAsync(req, ct);
+        if (!postResp.IsSuccessStatusCode)
+        {
+            var body = await postResp.Content.ReadAsStringAsync(ct);
+            return (false, $"Post failed ({(int)postResp.StatusCode}):\n{body}");
+        }
+
+        return (true, null);
+    }
+
     // Posts pre-built text with no URL or hashtag processing — used for non-article posts.
     public async Task<(bool Ok, string? Error)> PostTextAsync(
         string handle, string appPassword, string text, CancellationToken ct)
@@ -190,5 +271,10 @@ internal sealed class BlueskyPoster : IDisposable
     {
         [JsonPropertyName("$type")] public string Type { get; init; } = "app.bsky.richtext.facet#tag";
         [JsonPropertyName("tag")]   public string Tag  { get; init; } = "";
+    }
+
+    private sealed class UploadBlobResponse
+    {
+        [JsonPropertyName("blob")] public System.Text.Json.JsonElement Blob { get; init; }
     }
 }
