@@ -12,7 +12,6 @@ internal static class CredentialManager
     private const string CommodityBlueskyTarget    = "GdeltSearchUI/CommodityBluesky";
     private const string EiaTarget                 = "GdeltSearchUI/EIA";
     private const string ApiNinjasTarget           = "GdeltSearchUI/ApiNinjas";
-    private const string OilPriceTarget            = "GdeltSearchUI/OilPriceAPI";
     private const uint CRED_TYPE_GENERIC = 1;
     private const uint CRED_PERSIST_LOCAL_MACHINE = 2;
 
@@ -113,14 +112,6 @@ internal static class CredentialManager
 
     public static string? LoadApiNinjasKey() =>
         LoadInternal(ApiNinjasTarget)?.Password;
-
-    // ── OilPriceAPI ───────────────────────────────────────────────────────────
-
-    public static void SaveOilPriceApiKey(string apiKey) =>
-        SaveInternal(OilPriceTarget, "oilpriceapi", apiKey);
-
-    public static string? LoadOilPriceApiKey() =>
-        LoadInternal(OilPriceTarget)?.Password;
 
     // ── EIA ───────────────────────────────────────────────────────────────────
 

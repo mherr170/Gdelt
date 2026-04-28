@@ -37,26 +37,6 @@ internal partial class CommodityForm
             dlg.ShowDialog(this);
         };
 
-        var oilKeyBtn = new Button
-        {
-            Text      = "⚙ OilPrice",
-            Dock      = DockStyle.Right,
-            Width     = 80,
-            BackColor = DarkTheme.Raised,
-            ForeColor = DarkTheme.TextPrimary,
-            FlatStyle = FlatStyle.Flat,
-            Cursor    = Cursors.Hand,
-        };
-        oilKeyBtn.FlatAppearance.BorderSize = 0;
-        oilKeyBtn.Click += (_, _) =>
-        {
-            var current = CredentialManager.LoadOilPriceApiKey() ?? "";
-            var key = PromptForApiKey(
-                $"OilPriceAPI.com key (oilpriceapi.com){(current.Length > 0 ? " — leave blank to keep existing" : "")}:");
-            if (key is not null)
-                CredentialManager.SaveOilPriceApiKey(key);
-        };
-
         _postButton = new Button
         {
             Text = "Post",
@@ -96,7 +76,6 @@ internal partial class CommodityForm
 
         // Right-docked controls added in reverse visual order (rightmost first)
         bar.Controls.Add(accountBtn);
-        bar.Controls.Add(oilKeyBtn);
         bar.Controls.Add(_postButton);
         bar.Controls.Add(_refreshButton);
         bar.Controls.Add(heading);
@@ -107,7 +86,7 @@ internal partial class CommodityForm
     {
         var catalog    = CommodityApiClient.Catalog;
         var n          = catalog.Length;
-        var oilCatalog = OilPriceApiClient.Catalog;
+        var oilCatalog = YahooFinanceApiClient.Catalog;
         var nOil       = oilCatalog.Length;
         // rows = EIA section header + EIA data + OilPrice section header + OilPrice data
         var nRows = n + Sections.Length + nOil + 1;
@@ -197,7 +176,7 @@ internal partial class CommodityForm
         // ── OilPriceAPI.com section ───────────────────────────────────────────
         var oilHdr = new Label
         {
-            Text      = "OILPRICE API (live)",
+            Text      = "YAHOO FINANCE FUTURES (~15 min)",
             Dock      = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             ForeColor = DarkTheme.TextMuted,
@@ -212,7 +191,7 @@ internal partial class CommodityForm
 
         for (var j = 0; j < oilCatalog.Length; j++)
         {
-            var (_, displayName, unit) = oilCatalog[j];
+            var (_, _, displayName, unit) = oilCatalog[j];
             var jj = j;
 
             var nameLabel = new Label

@@ -45,44 +45,38 @@ internal partial class CommodityForm
 
         UpdatePostButton();
 
-        // ── OilPriceAPI (optional — only if key is configured) ────────────────
-        string? oilPriceStatus = null;
-        var oilKey = CredentialManager.LoadOilPriceApiKey();
-        if (oilKey is not null)
+        // ── Yahoo Finance futures (no key required) ───────────────────────────
+        string yahooStatus;
+        SetStatus("Fetching Yahoo Finance futures…");
+        try
         {
-            SetStatus("Fetching OilPriceAPI live prices…");
-            try
-            {
-                using var oilClient = new OilPriceApiClient(oilKey);
-                var oilPrices = await oilClient.GetLatestAsync();
-                _lastResult = _lastResult with { OilPrices = oilPrices };
+            using var yahooClient = new YahooFinanceApiClient();
+            var livePrices = await yahooClient.GetLatestAsync();
+            _lastResult = _lastResult with { OilPrices = livePrices };
 
-                var oilCatalog = OilPriceApiClient.Catalog;
-                for (var j = 0; j < oilCatalog.Length; j++)
+            var yahooCatalog = YahooFinanceApiClient.Catalog;
+            for (var j = 0; j < yahooCatalog.Length; j++)
+            {
+                var entry = livePrices.FirstOrDefault(p => p.Code == yahooCatalog[j].Code);
+                if (entry is null) continue;
+                _oilPriceLabels[j].Text = FmtOilPrice(entry);
+                if (entry.Previous.HasValue)
                 {
-                    var entry = oilPrices.FirstOrDefault(p => p.Code == oilCatalog[j].Code);
-                    if (entry is null) continue;
-                    _oilPriceLabels[j].Text = FmtOilPrice(entry);
-                    // delta: no previous price available from this endpoint
-                    _oilPriceDeltaLabels[j].Text = "";
+                    var (dText, dColor) = FormatDelta(entry.Price, entry.Previous);
+                    _oilPriceDeltaLabels[j].Text      = dText;
+                    _oilPriceDeltaLabels[j].ForeColor = dColor;
                 }
+            }
 
-                var freshest = oilPrices.Count > 0
-                    ? oilPrices.Max(p => p.UpdatedAt)
-                    : default;
-                oilPriceStatus = freshest != default
-                    ? $"OilPrice API as of {freshest:HH:mm}"
-                    : "OilPrice API: ok";
-            }
-            catch (Exception ex)
-            {
-                AppLogger.Log($"OilPriceAPI fetch failed: {ex.Message}");
-                oilPriceStatus = "OilPrice API: error";
-            }
+            var freshest = livePrices.Count > 0 ? livePrices.Max(p => p.UpdatedAt) : default;
+            yahooStatus = freshest != default
+                ? $"Yahoo as of {freshest.LocalDateTime:HH:mm}"
+                : "Yahoo: ok";
         }
-        else
+        catch (Exception ex)
         {
-            oilPriceStatus = "OilPrice API: no key";
+            AppLogger.Log($"Yahoo Finance fetch failed: {ex.Message}");
+            yahooStatus = "Yahoo: error";
         }
 
         // ── Status bar ────────────────────────────────────────────────────────
@@ -90,7 +84,7 @@ internal partial class CommodityForm
         var weeklyDate = result.Prices.Where(p =>  p.Unit.Contains("wk")).Select(p => p.UpdatedAt).DefaultIfEmpty().Max();
         var statusParts = new List<string> { $"EIA Crude/NG as of {dailyDate:yyyy-MM-dd}" };
         if (weeklyDate != default) statusParts.Add($"Htg Oil/RBOB as of {weeklyDate:yyyy-MM-dd} (wk)");
-        if (oilPriceStatus is not null) statusParts.Add(oilPriceStatus);
+        statusParts.Add(yahooStatus);
         SetStatus(string.Join("  ·  ", statusParts));
         SetBusy(false);
     }
