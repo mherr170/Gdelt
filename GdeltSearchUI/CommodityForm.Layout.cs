@@ -231,7 +231,7 @@ internal partial class CommodityForm
         t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
         t.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         for (var i = 0; i < rowCount; i++)
-            t.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            t.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         return t;
     }
 

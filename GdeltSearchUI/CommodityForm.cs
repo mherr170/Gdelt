@@ -20,7 +20,7 @@ internal partial class CommodityForm : DataForm
     public CommodityForm()
     {
         Text = "Energy Spot Prices — EIA";
-        Size = new Size(580, 560);
+        Size = new Size(620, 660);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
