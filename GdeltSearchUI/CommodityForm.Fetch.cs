@@ -14,18 +14,27 @@ internal partial class CommodityForm
 
         SetBusy(true);
         ClearPrices();
-        SetStatus("Fetching EIA energy spot prices…");
+        _eiaStatusLabel.Text   = "Fetching…";
+        _yahooStatusLabel.Text = "Fetching…";
 
+        // ── EIA ───────────────────────────────────────────────────────────────
         CommodityData result;
         using (var client = new CommodityApiClient(apiKey))
         {
             try   { result = await client.GetAllAsync(); }
-            catch (Exception ex) { ShowError(ex.Message); SetBusy(false); return; }
+            catch (Exception ex)
+            {
+                ShowError(ex.Message);
+                _eiaStatusLabel.Text = "Error — see details";
+                SetBusy(false);
+                return;
+            }
         }
 
         if (!result.IsSuccess)
         {
             ShowError(result.ErrorMessage!);
+            _eiaStatusLabel.Text = "Error — see details";
             SetBusy(false);
             return;
         }
@@ -45,9 +54,13 @@ internal partial class CommodityForm
 
         UpdatePostButton();
 
+        var dailyDate  = result.Prices.Where(p => !p.Unit.Contains("wk")).Select(p => p.UpdatedAt).Max();
+        var weeklyDate = result.Prices.Where(p =>  p.Unit.Contains("wk")).Select(p => p.UpdatedAt).DefaultIfEmpty().Max();
+        var eiaStatus = $"Crude/NG as of {dailyDate:yyyy-MM-dd}";
+        if (weeklyDate != default) eiaStatus += $"  ·  Htg Oil/RBOB as of {weeklyDate:yyyy-MM-dd} (wk)";
+        _eiaStatusLabel.Text = eiaStatus;
+
         // ── Yahoo Finance futures (no key required) ───────────────────────────
-        string yahooStatus;
-        SetStatus("Fetching Yahoo Finance futures…");
         try
         {
             using var yahooClient = new YahooFinanceApiClient();
@@ -69,23 +82,16 @@ internal partial class CommodityForm
             }
 
             var freshest = livePrices.Count > 0 ? livePrices.Max(p => p.UpdatedAt) : default;
-            yahooStatus = freshest != default
-                ? $"Yahoo as of {freshest.LocalDateTime:HH:mm}"
-                : "Yahoo: ok";
+            _yahooStatusLabel.Text = freshest != default
+                ? $"Last updated {freshest.LocalDateTime:HH:mm}  ·  ~15 min delayed"
+                : "Data received";
         }
         catch (Exception ex)
         {
             AppLogger.Log($"Yahoo Finance fetch failed: {ex.Message}");
-            yahooStatus = "Yahoo: error";
+            _yahooStatusLabel.Text = "Error fetching futures — see log";
         }
 
-        // ── Status bar ────────────────────────────────────────────────────────
-        var dailyDate  = result.Prices.Where(p => !p.Unit.Contains("wk")).Select(p => p.UpdatedAt).Max();
-        var weeklyDate = result.Prices.Where(p =>  p.Unit.Contains("wk")).Select(p => p.UpdatedAt).DefaultIfEmpty().Max();
-        var statusParts = new List<string> { $"EIA Crude/NG as of {dailyDate:yyyy-MM-dd}" };
-        if (weeklyDate != default) statusParts.Add($"Htg Oil/RBOB as of {weeklyDate:yyyy-MM-dd} (wk)");
-        statusParts.Add(yahooStatus);
-        SetStatus(string.Join("  ·  ", statusParts));
         SetBusy(false);
     }
 

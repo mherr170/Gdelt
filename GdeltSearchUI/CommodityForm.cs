@@ -3,10 +3,13 @@ namespace GdeltSearchUI;
 internal partial class CommodityForm : DataForm
 {
     // Parallel arrays indexed to their respective catalog.
-    private Label[]  _priceLabels       = null!;   // EIA — CommodityApiClient.Catalog
-    private Label[]  _deltaLabels       = null!;
-    private Label[]  _oilPriceLabels    = null!;   // OilPriceAPI — OilPriceApiClient.Catalog
+    private Label[]  _priceLabels         = null!;   // EIA — CommodityApiClient.Catalog
+    private Label[]  _deltaLabels         = null!;
+    private Label[]  _oilPriceLabels      = null!;   // Yahoo Finance — YahooFinanceApiClient.Catalog
     private Label[]  _oilPriceDeltaLabels = null!;
+    // Per-card status labels (data freshness); global _statusLabel = Bluesky feedback only.
+    private Label    _eiaStatusLabel    = null!;
+    private Label    _yahooStatusLabel  = null!;
     private Label    _statusLabel       = null!;
     private Button   _refreshButton = null!;
     private Button   _postButton    = null!;
@@ -17,14 +20,14 @@ internal partial class CommodityForm : DataForm
     public CommodityForm()
     {
         Text = "Energy Spot Prices — EIA";
-        Size = new Size(580, 530);
+        Size = new Size(580, 560);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         Font = new Font("Segoe UI", 9.5f);
         BackColor = DarkTheme.Background;
 
-        Controls.Add(BuildPricePanel());
+        Controls.Add(BuildDataArea());
         Controls.Add(BuildToolbar());
         Controls.Add(BuildStatusLabel());
 
@@ -41,9 +44,9 @@ internal partial class CommodityForm : DataForm
 
     private static string FmtOilPrice(OilPriceEntry e) => e.Code switch
     {
-        "NATURAL_GAS_USD"                                               => $"${e.Price:F3}",
-        "GASOLINE_RBOB_USD" or "HEATING_OIL_USD" or "ULSD_DIESEL_USD" => $"${e.Price:F3}",
-        _                                                               => $"${e.Price:F2}",
+        "NATURAL_GAS"                        => $"${e.Price:F3}",
+        "RBOB_GASOLINE" or "HEATING_OIL"    => $"${e.Price:F3}",
+        _                                    => $"${e.Price:F2}",  // crude benchmarks
     };
 
     private static (string text, Color color) FormatDelta(double curr, double? prev)
@@ -88,9 +91,11 @@ internal partial class CommodityForm : DataForm
         }
         for (var i = 0; i < _oilPriceLabels.Length; i++)
         {
-            _oilPriceLabels[i].Text         = "—";
-            _oilPriceDeltaLabels[i].Text    = "";
+            _oilPriceLabels[i].Text      = "—";
+            _oilPriceDeltaLabels[i].Text = "";
         }
+        _eiaStatusLabel.Text   = "—";
+        _yahooStatusLabel.Text = "—";
     }
 
     protected override void Dispose(bool disposing)
