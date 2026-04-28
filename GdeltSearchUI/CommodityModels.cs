@@ -42,8 +42,10 @@ internal sealed record CommodityHistoryPoint
 
 internal sealed record CommodityData
 {
-    public IReadOnlyList<CommodityPrice>        Prices      { get; init; } = [];
-    public IReadOnlyList<CommodityHistoryPoint> History     { get; init; } = [];
+    public IReadOnlyList<CommodityPrice>        Prices       { get; init; } = [];
+    public IReadOnlyList<CommodityHistoryPoint> History      { get; init; } = [];
+    /// <summary>null = not fetched (no API key); empty = fetch attempted but returned nothing.</summary>
+    public IReadOnlyList<OilPriceEntry>?        OilPrices    { get; init; }
     public string?                              ErrorMessage { get; init; }
     public bool                                 IsSuccess => ErrorMessage is null;
 }

@@ -37,6 +37,26 @@ internal partial class CommodityForm
             dlg.ShowDialog(this);
         };
 
+        var oilKeyBtn = new Button
+        {
+            Text      = "⚙ OilPrice",
+            Dock      = DockStyle.Right,
+            Width     = 80,
+            BackColor = DarkTheme.Raised,
+            ForeColor = DarkTheme.TextPrimary,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
+        };
+        oilKeyBtn.FlatAppearance.BorderSize = 0;
+        oilKeyBtn.Click += (_, _) =>
+        {
+            var current = CredentialManager.LoadOilPriceApiKey() ?? "";
+            var key = PromptForApiKey(
+                $"OilPriceAPI.com key (oilpriceapi.com){(current.Length > 0 ? " — leave blank to keep existing" : "")}:");
+            if (key is not null)
+                CredentialManager.SaveOilPriceApiKey(key);
+        };
+
         _postButton = new Button
         {
             Text = "Post",
@@ -74,8 +94,9 @@ internal partial class CommodityForm
             Font = new Font("Segoe UI", 8.5f),
         };
 
-        // Right-docked controls added in reverse visual order
+        // Right-docked controls added in reverse visual order (rightmost first)
         bar.Controls.Add(accountBtn);
+        bar.Controls.Add(oilKeyBtn);
         bar.Controls.Add(_postButton);
         bar.Controls.Add(_refreshButton);
         bar.Controls.Add(heading);
@@ -84,12 +105,17 @@ internal partial class CommodityForm
 
     private Panel BuildPricePanel()
     {
-        var catalog = CommodityApiClient.Catalog;
-        var n       = catalog.Length;
-        var nRows   = n + Sections.Length;
+        var catalog    = CommodityApiClient.Catalog;
+        var n          = catalog.Length;
+        var oilCatalog = OilPriceApiClient.Catalog;
+        var nOil       = oilCatalog.Length;
+        // rows = EIA section header + EIA data + OilPrice section header + OilPrice data
+        var nRows = n + Sections.Length + nOil + 1;
 
-        _priceLabels = new Label[n];
-        _deltaLabels = new Label[n];
+        _priceLabels          = new Label[n];
+        _deltaLabels          = new Label[n];
+        _oilPriceLabels       = new Label[nOil];
+        _oilPriceDeltaLabels  = new Label[nOil];
 
         var table = new TableLayoutPanel
         {
@@ -166,6 +192,65 @@ internal partial class CommodityForm
                 tableRow++;
                 catIdx++;
             }
+        }
+
+        // ── OilPriceAPI.com section ───────────────────────────────────────────
+        var oilHdr = new Label
+        {
+            Text      = "OILPRICE API (live)",
+            Dock      = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = DarkTheme.TextMuted,
+            BackColor = DarkTheme.Surface,
+            Font      = new Font("Segoe UI", 8f, FontStyle.Bold),
+            Padding   = new Padding(4, 0, 0, 0),
+        };
+        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        table.Controls.Add(oilHdr, 0, tableRow);
+        table.SetColumnSpan(oilHdr, 3);
+        tableRow++;
+
+        for (var j = 0; j < oilCatalog.Length; j++)
+        {
+            var (_, displayName, unit) = oilCatalog[j];
+            var jj = j;
+
+            var nameLabel = new Label
+            {
+                Text      = $"{displayName}  ({unit})",
+                Dock      = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleLeft,
+                ForeColor = DarkTheme.TextMuted,
+                Font      = new Font("Segoe UI", 9.5f),
+            };
+
+            var priceLabel = new Label
+            {
+                Text      = "—",
+                Dock      = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = DarkTheme.TextPrimary,
+                Font      = new Font("Segoe UI", 13f, FontStyle.Bold),
+            };
+
+            var deltaLabel = new Label
+            {
+                Text      = "",
+                Dock      = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleRight,
+                ForeColor = DarkTheme.TextMuted,
+                Font      = new Font("Segoe UI", 9f),
+                Padding   = new Padding(4, 0, 0, 0),
+            };
+
+            _oilPriceLabels[jj]      = priceLabel;
+            _oilPriceDeltaLabels[jj] = deltaLabel;
+
+            table.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+            table.Controls.Add(nameLabel,  0, tableRow);
+            table.Controls.Add(priceLabel, 1, tableRow);
+            table.Controls.Add(deltaLabel, 2, tableRow);
+            tableRow++;
         }
 
         return table;

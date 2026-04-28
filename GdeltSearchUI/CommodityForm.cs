@@ -2,10 +2,12 @@ namespace GdeltSearchUI;
 
 internal partial class CommodityForm : DataForm
 {
-    // Parallel arrays, indexed to match CommodityApiClient.Catalog order.
-    private Label[]  _priceLabels   = null!;
-    private Label[]  _deltaLabels   = null!;
-    private Label    _statusLabel   = null!;
+    // Parallel arrays indexed to their respective catalog.
+    private Label[]  _priceLabels       = null!;   // EIA — CommodityApiClient.Catalog
+    private Label[]  _deltaLabels       = null!;
+    private Label[]  _oilPriceLabels    = null!;   // OilPriceAPI — OilPriceApiClient.Catalog
+    private Label[]  _oilPriceDeltaLabels = null!;
+    private Label    _statusLabel       = null!;
     private Button   _refreshButton = null!;
     private Button   _postButton    = null!;
     private CommodityData? _lastResult;
@@ -15,7 +17,7 @@ internal partial class CommodityForm : DataForm
     public CommodityForm()
     {
         Text = "Energy Spot Prices — EIA";
-        Size = new Size(580, 310);
+        Size = new Size(580, 530);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
@@ -35,6 +37,13 @@ internal partial class CommodityForm : DataForm
         "natural_gas" => $"${p.Price:F3}",
         "copper"      => $"${p.Price:F3}",
         _             => $"${p.Price:F2}",
+    };
+
+    private static string FmtOilPrice(OilPriceEntry e) => e.Code switch
+    {
+        "NATURAL_GAS_USD"                                               => $"${e.Price:F3}",
+        "GASOLINE_RBOB_USD" or "HEATING_OIL_USD" or "ULSD_DIESEL_USD" => $"${e.Price:F3}",
+        _                                                               => $"${e.Price:F2}",
     };
 
     private static (string text, Color color) FormatDelta(double curr, double? prev)
@@ -67,8 +76,8 @@ internal partial class CommodityForm : DataForm
 
     private void ClearPrices()
     {
-        _lastResult         = null;
-        _postButton.Enabled = false;
+        _lastResult           = null;
+        _postButton.Enabled   = false;
         _postButton.Text      = "Post";
         _postButton.BackColor = DarkTheme.PostButtonDefault;
         for (var i = 0; i < _priceLabels.Length; i++)
@@ -76,6 +85,11 @@ internal partial class CommodityForm : DataForm
             _priceLabels[i].Text      = "—";
             _deltaLabels[i].Text      = "";
             _deltaLabels[i].ForeColor = DarkTheme.TextMuted;
+        }
+        for (var i = 0; i < _oilPriceLabels.Length; i++)
+        {
+            _oilPriceLabels[i].Text         = "—";
+            _oilPriceDeltaLabels[i].Text    = "";
         }
     }
 
