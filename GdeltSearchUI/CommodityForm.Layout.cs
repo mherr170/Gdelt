@@ -2,94 +2,16 @@ namespace GdeltSearchUI;
 
 internal partial class CommodityForm
 {
-    // ── Top toolbar ───────────────────────────────────────────────────────────
-
-    private Panel BuildToolbar()
-    {
-        var bar = new Panel
-        {
-            Dock      = DockStyle.Top,
-            Height    = 48,
-            BackColor = DarkTheme.Surface,
-            Padding   = new Padding(10, 8, 10, 8),
-        };
-
-        var accountBtn = new Button
-        {
-            Text      = "⚙ Account",
-            Dock      = DockStyle.Right,
-            Width     = 84,
-            BackColor = DarkTheme.Raised,
-            ForeColor = DarkTheme.TextPrimary,
-            FlatStyle = FlatStyle.Flat,
-            Cursor    = Cursors.Hand,
-        };
-        accountBtn.FlatAppearance.BorderSize = 0;
-        accountBtn.Click += (_, _) =>
-        {
-            using var dlg = new SettingsDialog(
-                CredentialManager.LoadCommodityBluesky,
-                CredentialManager.SaveCommodityBluesky,
-                "Bluesky Account — Commodities");
-            dlg.ShowDialog(this);
-        };
-
-        _postButton = new Button
-        {
-            Text      = "Post",
-            Dock      = DockStyle.Right,
-            Width     = 140,
-            BackColor = DarkTheme.PostButtonDefault,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Cursor    = Cursors.Hand,
-            Enabled   = false,
-        };
-        _postButton.FlatAppearance.BorderSize = 0;
-        _postButton.Click += async (_, _) => await PostToBlueskyAsync();
-
-        _refreshButton = new Button
-        {
-            Text      = "Refresh",
-            Dock      = DockStyle.Right,
-            Width     = 70,
-            BackColor = DarkTheme.AccentBlue,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Cursor    = Cursors.Hand,
-        };
-        _refreshButton.FlatAppearance.BorderSize = 0;
-        _refreshButton.Click += async (_, _) => await FetchAsync();
-
-        var heading = new Label
-        {
-            Text      = "Energy Spot Prices",
-            Dock      = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft,
-            ForeColor = DarkTheme.TextMuted,
-            BackColor = Color.Transparent,
-            Font      = new Font("Segoe UI", 8.5f),
-        };
-
-        // Right-docked controls added in reverse visual order (rightmost first)
-        bar.Controls.Add(accountBtn);
-        bar.Controls.Add(_postButton);
-        bar.Controls.Add(_refreshButton);
-        bar.Controls.Add(heading);
-        return bar;
-    }
-
     // ── Two-card data area ────────────────────────────────────────────────────
 
     private Control BuildDataArea()
     {
-        // Outer container with breathing room around and between cards
         var outer = new TableLayoutPanel
         {
             Dock        = DockStyle.Fill,
             RowCount    = 3,
             ColumnCount = 1,
-            Padding     = new Padding(8, 6, 8, 6),
+            Padding     = new Padding(8, 8, 8, 6),
             BackColor   = DarkTheme.Background,
         };
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -102,27 +24,113 @@ internal partial class CommodityForm
         return outer;
     }
 
+    // ── EIA card ──────────────────────────────────────────────────────────────
+
     private Panel BuildEiaCard()
     {
         var (border, content) = MakeCard();
 
-        var hdr   = MakeCardHeader("EIA ENERGY SPOT PRICES");
         _eiaStatusLabel = MakeCardStatus("Loading…");
+
+        var hdr   = BuildEiaHeader();
         var table = BuildEiaTable();
 
-        // DockStyle order matters: Bottom before Fill before Top
-        content.Controls.Add(_eiaStatusLabel);
-        content.Controls.Add(table);
-        content.Controls.Add(hdr);
+        content.Controls.Add(_eiaStatusLabel);   // Bottom
+        content.Controls.Add(table);              // Fill
+        content.Controls.Add(hdr);               // Top
         return border;
     }
+
+    private Panel BuildEiaHeader()
+    {
+        var hdr = new Panel
+        {
+            Dock      = DockStyle.Top,
+            Height    = 40,
+            BackColor = Color.FromArgb(0x2A, 0x2A, 0x2E),
+            Padding   = new Padding(8, 0, 4, 0),
+        };
+
+        // ⚙ Bluesky account
+        var accountBtn = new Button
+        {
+            Text      = "⚙",
+            Dock      = DockStyle.Right,
+            Width     = 30,
+            BackColor = DarkTheme.Raised,
+            ForeColor = DarkTheme.TextPrimary,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
+            Font      = new Font("Segoe UI", 9f),
+        };
+        accountBtn.FlatAppearance.BorderSize = 0;
+        accountBtn.Click += (_, _) =>
+        {
+            using var dlg = new SettingsDialog(
+                CredentialManager.LoadCommodityBluesky,
+                CredentialManager.SaveCommodityBluesky,
+                "Bluesky Account — Commodities");
+            dlg.ShowDialog(this);
+        };
+
+        // Post to Bluesky
+        _postButton = new Button
+        {
+            Text      = "Post",
+            Dock      = DockStyle.Right,
+            Width     = 140,
+            BackColor = DarkTheme.PostButtonDefault,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
+            Enabled   = false,
+            Font      = new Font("Segoe UI", 8.5f),
+        };
+        _postButton.FlatAppearance.BorderSize = 0;
+        _postButton.Click += async (_, _) => await PostToBlueskyAsync();
+
+        // Refresh EIA only
+        _eiaRefreshButton = new Button
+        {
+            Text      = "Refresh",
+            Dock      = DockStyle.Right,
+            Width     = 68,
+            BackColor = DarkTheme.AccentBlue,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
+            Font      = new Font("Segoe UI", 8.5f),
+        };
+        _eiaRefreshButton.FlatAppearance.BorderSize = 0;
+        _eiaRefreshButton.Click += async (_, _) => await FetchEiaAsync();
+
+        var title = new Label
+        {
+            Text      = "EIA ENERGY SPOT PRICES",
+            Dock      = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = DarkTheme.TextPrimary,
+            BackColor = Color.Transparent,
+            Font      = new Font("Segoe UI", 8f, FontStyle.Bold),
+        };
+
+        // Right-docked in reverse visual order (rightmost first)
+        hdr.Controls.Add(accountBtn);
+        hdr.Controls.Add(_postButton);
+        hdr.Controls.Add(_eiaRefreshButton);
+        hdr.Controls.Add(title);
+        return hdr;
+    }
+
+    // ── Yahoo Finance card ────────────────────────────────────────────────────
 
     private Panel BuildYahooCard()
     {
         var (border, content) = MakeCard();
 
-        var hdr   = MakeCardHeader("YAHOO FINANCE FUTURES  (~15 min delayed)");
         _yahooStatusLabel = MakeCardStatus("Loading…");
+
+        var hdr   = BuildYahooHeader();
         var table = BuildYahooTable();
 
         content.Controls.Add(_yahooStatusLabel);
@@ -131,37 +139,60 @@ internal partial class CommodityForm
         return border;
     }
 
+    private Panel BuildYahooHeader()
+    {
+        var hdr = new Panel
+        {
+            Dock      = DockStyle.Top,
+            Height    = 40,
+            BackColor = Color.FromArgb(0x2A, 0x2A, 0x2E),
+            Padding   = new Padding(8, 0, 4, 0),
+        };
+
+        // Refresh Yahoo only
+        _yahooRefreshButton = new Button
+        {
+            Text      = "Refresh",
+            Dock      = DockStyle.Right,
+            Width     = 68,
+            BackColor = DarkTheme.AccentBlue,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
+            Font      = new Font("Segoe UI", 8.5f),
+        };
+        _yahooRefreshButton.FlatAppearance.BorderSize = 0;
+        _yahooRefreshButton.Click += async (_, _) => await FetchYahooAsync();
+
+        var title = new Label
+        {
+            Text      = "YAHOO FINANCE FUTURES  (~15 min delayed)",
+            Dock      = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = DarkTheme.TextPrimary,
+            BackColor = Color.Transparent,
+            Font      = new Font("Segoe UI", 8f, FontStyle.Bold),
+        };
+
+        hdr.Controls.Add(_yahooRefreshButton);
+        hdr.Controls.Add(title);
+        return hdr;
+    }
+
     // ── Card frame helpers ────────────────────────────────────────────────────
 
     private static (Panel border, Panel content) MakeCard()
     {
-        var content = new Panel
+        var content = new Panel { Dock = DockStyle.Fill, BackColor = DarkTheme.Surface };
+        var border  = new Panel
         {
             Dock      = DockStyle.Fill,
-            BackColor = DarkTheme.Surface,
-        };
-        // 1-px Raised border achieved by padding a slightly lighter backing panel
-        var border = new Panel
-        {
-            Dock      = DockStyle.Fill,
-            BackColor = DarkTheme.Raised,
+            BackColor = DarkTheme.Raised,   // 1-px border via padding
             Padding   = new Padding(1),
         };
         border.Controls.Add(content);
         return (border, content);
     }
-
-    private static Label MakeCardHeader(string text) => new()
-    {
-        Text      = text,
-        Dock      = DockStyle.Top,
-        Height    = 26,
-        TextAlign = ContentAlignment.MiddleLeft,
-        ForeColor = DarkTheme.TextPrimary,
-        BackColor = Color.FromArgb(0x2A, 0x2A, 0x2E),
-        Font      = new Font("Segoe UI", 8f, FontStyle.Bold),
-        Padding   = new Padding(8, 0, 0, 0),
-    };
 
     private static Label MakeCardStatus(string text) => new()
     {
@@ -188,7 +219,7 @@ internal partial class CommodityForm
         for (var i = 0; i < n; i++)
         {
             var (_, displayName, unit, _, _) = catalog[i];
-            var (name, price, delta) = AddDataRow(table, i, $"{displayName}  ({unit})");
+            var (_, price, delta) = AddDataRow(table, i, $"{displayName}  ({unit})");
             _priceLabels[i] = price;
             _deltaLabels[i] = delta;
         }
@@ -208,14 +239,14 @@ internal partial class CommodityForm
         for (var j = 0; j < n; j++)
         {
             var (_, _, displayName, unit) = catalog[j];
-            var (name, price, delta) = AddDataRow(table, j, $"{displayName}  ({unit})");
+            var (_, price, delta) = AddDataRow(table, j, $"{displayName}  ({unit})");
             _oilPriceLabels[j]      = price;
             _oilPriceDeltaLabels[j] = delta;
         }
         return table;
     }
 
-    // ── Shared table/row factories ────────────────────────────────────────────
+    // ── Shared table / row factories ──────────────────────────────────────────
 
     private static TableLayoutPanel MakeDataTable(int rowCount)
     {
@@ -269,7 +300,7 @@ internal partial class CommodityForm
         return (name, price, delta);
     }
 
-    // ── Global status bar (Bluesky / operational messages only) ──────────────
+    // ── Global status bar (Bluesky / posting feedback only) ──────────────────
 
     private Label BuildStatusLabel() => _statusLabel = CreateStatusLabel();
 }

@@ -7,32 +7,35 @@ internal partial class CommodityForm : DataForm
     private Label[]  _deltaLabels         = null!;
     private Label[]  _oilPriceLabels      = null!;   // Yahoo Finance — YahooFinanceApiClient.Catalog
     private Label[]  _oilPriceDeltaLabels = null!;
-    // Per-card status labels (data freshness); global _statusLabel = Bluesky feedback only.
-    private Label    _eiaStatusLabel    = null!;
-    private Label    _yahooStatusLabel  = null!;
-    private Label    _statusLabel       = null!;
-    private Button   _refreshButton = null!;
-    private Button   _postButton    = null!;
-    private CommodityData? _lastResult;
+    // Per-card status labels (data freshness); _statusLabel = Bluesky feedback only.
+    private Label    _eiaStatusLabel      = null!;
+    private Label    _yahooStatusLabel    = null!;
+    private Label    _statusLabel         = null!;
+    // Per-card buttons — each set applies only to its source.
+    private Button   _eiaRefreshButton    = null!;
+    private Button   _yahooRefreshButton  = null!;
+    private Button   _postButton          = null!;
 
+    private CommodityData? _lastResult;
     private readonly BlueskyPoster _poster = new();
 
     public CommodityForm()
     {
-        Text = "Energy Spot Prices — EIA";
-        Size = new Size(620, 660);
+        Text            = "Energy Spot Prices — EIA + Yahoo Finance";
+        Size            = new Size(620, 660);
         FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Segoe UI", 9.5f);
-        BackColor = DarkTheme.Background;
+        MaximizeBox     = false;
+        StartPosition   = FormStartPosition.CenterScreen;
+        Font            = new Font("Segoe UI", 9.5f);
+        BackColor       = DarkTheme.Background;
 
         Controls.Add(BuildDataArea());
-        Controls.Add(BuildToolbar());
-        Controls.Add(BuildStatusLabel());
+        Controls.Add(BuildStatusLabel());   // Bluesky/operational feedback at bottom
 
-        Shown += async (_, _) => await FetchAsync();
+        Shown += async (_, _) => await FetchAllAsync();
     }
+
+    // ── Formatters ────────────────────────────────────────────────────────────
 
     private static string FmtPrice(CommodityPrice p) => p.Slug switch
     {
@@ -44,9 +47,9 @@ internal partial class CommodityForm : DataForm
 
     private static string FmtOilPrice(OilPriceEntry e) => e.Code switch
     {
-        "NATURAL_GAS"                        => $"${e.Price:F3}",
-        "RBOB_GASOLINE" or "HEATING_OIL"    => $"${e.Price:F3}",
-        _                                    => $"${e.Price:F2}",  // crude benchmarks
+        "NATURAL_GAS"                     => $"${e.Price:F3}",
+        "RBOB_GASOLINE" or "HEATING_OIL" => $"${e.Price:F3}",
+        _                                 => $"${e.Price:F2}",
     };
 
     private static (string text, Color color) FormatDelta(double curr, double? prev)
@@ -59,13 +62,23 @@ internal partial class CommodityForm : DataForm
         return ($"{arrow} {(pct > 0 ? "+" : "")}{pct:F2}%", color);
     }
 
-    private void SetBusy(bool busy)
+    // ── Busy helpers (per-source) ─────────────────────────────────────────────
+
+    private void SetEiaBusy(bool busy)
     {
-        _refreshButton.Enabled = !busy;
-        _refreshButton.Text    = busy ? "…" : "Refresh";
+        _eiaRefreshButton.Enabled = !busy;
+        _eiaRefreshButton.Text    = busy ? "…" : "Refresh";
+    }
+
+    private void SetYahooBusy(bool busy)
+    {
+        _yahooRefreshButton.Enabled = !busy;
+        _yahooRefreshButton.Text    = busy ? "…" : "Refresh";
     }
 
     protected override void SetStatus(string msg) => _statusLabel.Text = msg;
+
+    // ── Post button ───────────────────────────────────────────────────────────
 
     internal void UpdatePostButton()
     {
@@ -77,7 +90,9 @@ internal partial class CommodityForm : DataForm
         _postButton.Enabled   = true;
     }
 
-    private void ClearPrices()
+    // ── Clear helpers (per-source + combined) ─────────────────────────────────
+
+    private void ClearEiaPrices()
     {
         _lastResult           = null;
         _postButton.Enabled   = false;
@@ -89,13 +104,24 @@ internal partial class CommodityForm : DataForm
             _deltaLabels[i].Text      = "";
             _deltaLabels[i].ForeColor = DarkTheme.TextMuted;
         }
+        _eiaStatusLabel.Text = "—";
+    }
+
+    private void ClearYahooPrices()
+    {
         for (var i = 0; i < _oilPriceLabels.Length; i++)
         {
-            _oilPriceLabels[i].Text      = "—";
-            _oilPriceDeltaLabels[i].Text = "";
+            _oilPriceLabels[i].Text         = "—";
+            _oilPriceDeltaLabels[i].Text    = "";
+            _oilPriceDeltaLabels[i].ForeColor = DarkTheme.TextMuted;
         }
-        _eiaStatusLabel.Text   = "—";
         _yahooStatusLabel.Text = "—";
+    }
+
+    private void ClearAllPrices()
+    {
+        ClearEiaPrices();
+        ClearYahooPrices();
     }
 
     protected override void Dispose(bool disposing)

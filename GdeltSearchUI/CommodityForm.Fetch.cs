@@ -2,7 +2,16 @@ namespace GdeltSearchUI;
 
 internal partial class CommodityForm
 {
-    private async Task FetchAsync()
+    // Called on form shown — fetches both sources sequentially.
+    private async Task FetchAllAsync()
+    {
+        await FetchEiaAsync();
+        await FetchYahooAsync();
+    }
+
+    // ── EIA (called by EIA Refresh button) ───────────────────────────────────
+
+    private async Task FetchEiaAsync()
     {
         var apiKey = CredentialManager.LoadEiaApiKey();
         if (apiKey is null)
@@ -12,12 +21,10 @@ internal partial class CommodityForm
             CredentialManager.SaveEiaApiKey(apiKey);
         }
 
-        SetBusy(true);
-        ClearPrices();
-        _eiaStatusLabel.Text   = "Fetching…";
-        _yahooStatusLabel.Text = "Fetching…";
+        SetEiaBusy(true);
+        ClearEiaPrices();
+        _eiaStatusLabel.Text = "Fetching…";
 
-        // ── EIA ───────────────────────────────────────────────────────────────
         CommodityData result;
         using (var client = new CommodityApiClient(apiKey))
         {
@@ -26,7 +33,7 @@ internal partial class CommodityForm
             {
                 ShowError(ex.Message);
                 _eiaStatusLabel.Text = "Error — see details";
-                SetBusy(false);
+                SetEiaBusy(false);
                 return;
             }
         }
@@ -35,11 +42,14 @@ internal partial class CommodityForm
         {
             ShowError(result.ErrorMessage!);
             _eiaStatusLabel.Text = "Error — see details";
-            SetBusy(false);
+            SetEiaBusy(false);
             return;
         }
 
-        _lastResult = result;
+        // Preserve any Yahoo prices already in _lastResult
+        _lastResult = (_lastResult is null)
+            ? result
+            : result with { OilPrices = _lastResult.OilPrices };
 
         var catalog = CommodityApiClient.Catalog;
         for (var i = 0; i < catalog.Length; i++)
@@ -56,16 +66,28 @@ internal partial class CommodityForm
 
         var dailyDate  = result.Prices.Where(p => !p.Unit.Contains("wk")).Select(p => p.UpdatedAt).Max();
         var weeklyDate = result.Prices.Where(p =>  p.Unit.Contains("wk")).Select(p => p.UpdatedAt).DefaultIfEmpty().Max();
-        var eiaStatus = $"Crude/NG as of {dailyDate:yyyy-MM-dd}";
-        if (weeklyDate != default) eiaStatus += $"  ·  Htg Oil/RBOB as of {weeklyDate:yyyy-MM-dd} (wk)";
-        _eiaStatusLabel.Text = eiaStatus;
+        _eiaStatusLabel.Text = weeklyDate != default
+            ? $"Crude/NG as of {dailyDate:yyyy-MM-dd}  ·  Htg Oil/RBOB as of {weeklyDate:yyyy-MM-dd} (wk)"
+            : $"As of {dailyDate:yyyy-MM-dd}";
 
-        // ── Yahoo Finance futures (no key required) ───────────────────────────
+        SetEiaBusy(false);
+    }
+
+    // ── Yahoo Finance (called by Yahoo Refresh button) ────────────────────────
+
+    private async Task FetchYahooAsync()
+    {
+        SetYahooBusy(true);
+        ClearYahooPrices();
+        _yahooStatusLabel.Text = "Fetching…";
+
         try
         {
-            using var yahooClient = new YahooFinanceApiClient();
-            var livePrices = await yahooClient.GetLatestAsync();
-            _lastResult = _lastResult with { OilPrices = livePrices };
+            using var client   = new YahooFinanceApiClient();
+            var livePrices     = await client.GetLatestAsync();
+
+            if (_lastResult is not null)
+                _lastResult = _lastResult with { OilPrices = livePrices };
 
             var yahooCatalog = YahooFinanceApiClient.Catalog;
             for (var j = 0; j < yahooCatalog.Length; j++)
@@ -92,7 +114,6 @@ internal partial class CommodityForm
             _yahooStatusLabel.Text = "Error fetching futures — see log";
         }
 
-        SetBusy(false);
+        SetYahooBusy(false);
     }
-
 }
