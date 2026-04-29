@@ -149,6 +149,44 @@ internal partial class CommodityForm
             Padding   = new Padding(8, 0, 4, 0),
         };
 
+        // ⚙ Bluesky account
+        var accountBtn = new Button
+        {
+            Text      = "⚙",
+            Dock      = DockStyle.Right,
+            Width     = 30,
+            BackColor = DarkTheme.Raised,
+            ForeColor = DarkTheme.TextPrimary,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
+            Font      = new Font("Segoe UI", 9f),
+        };
+        accountBtn.FlatAppearance.BorderSize = 0;
+        accountBtn.Click += (_, _) =>
+        {
+            using var dlg = new SettingsDialog(
+                CredentialManager.LoadYahooBluesky,
+                CredentialManager.SaveYahooBluesky,
+                "Bluesky Account — Yahoo Finance Futures");
+            dlg.ShowDialog(this);
+        };
+
+        // Post to Bluesky
+        _yahooPostButton = new Button
+        {
+            Text      = "Post",
+            Dock      = DockStyle.Right,
+            Width     = 140,
+            BackColor = DarkTheme.PostButtonDefault,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor    = Cursors.Hand,
+            Enabled   = false,
+            Font      = new Font("Segoe UI", 8.5f),
+        };
+        _yahooPostButton.FlatAppearance.BorderSize = 0;
+        _yahooPostButton.Click += async (_, _) => await PostYahooToBlueskyAsync();
+
         // Refresh Yahoo only
         _yahooRefreshButton = new Button
         {
@@ -174,6 +212,9 @@ internal partial class CommodityForm
             Font      = new Font("Segoe UI", 8f, FontStyle.Bold),
         };
 
+        // Right-docked in reverse visual order (rightmost first)
+        hdr.Controls.Add(accountBtn);
+        hdr.Controls.Add(_yahooPostButton);
         hdr.Controls.Add(_yahooRefreshButton);
         hdr.Controls.Add(title);
         return hdr;

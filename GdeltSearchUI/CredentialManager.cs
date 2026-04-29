@@ -10,6 +10,7 @@ internal static class CredentialManager
     private const string QuakeBlueskyTarget        = "GdeltSearchUI/QuakeBluesky";
     private const string DebtBlueskyTarget         = "GdeltSearchUI/DebtBluesky";
     private const string CommodityBlueskyTarget    = "GdeltSearchUI/CommodityBluesky";
+    private const string YahooBlueskyTarget         = "GdeltSearchUI/YahooBluesky";
     private const string EiaTarget                 = "GdeltSearchUI/EIA";
     private const string ApiNinjasTarget           = "GdeltSearchUI/ApiNinjas";
     private const uint CRED_TYPE_GENERIC = 1;
@@ -104,6 +105,14 @@ internal static class CredentialManager
 
     public static (string Handle, string Password)? LoadCommodityBluesky() =>
         LoadInternal(CommodityBlueskyTarget);
+
+    // ── Yahoo Finance Bluesky ─────────────────────────────────────────────────
+
+    public static void SaveYahooBluesky(string handle, string password) =>
+        SaveInternal(YahooBlueskyTarget, handle, password);
+
+    public static (string Handle, string Password)? LoadYahooBluesky() =>
+        LoadInternal(YahooBlueskyTarget);
 
     // ── API-Ninjas ─────────────────────────────────────────────────────────────
 

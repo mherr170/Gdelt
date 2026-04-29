@@ -70,6 +70,23 @@ internal static class LmStudioPostGenerator
         "Tag rules: always include Earthquake or Quake; include the region/country; " +
         "PascalCase for multi-word tags; never use generic words like Event, Update, News.";
 
+    private const string YahooFuturesSystemPrompt =
+        "You write short, punchy Bluesky captions about energy futures prices. " +
+        "Given near-real-time NYMEX futures prices and day-over-day changes, reply with EXACTLY these two lines and nothing else:\n\n" +
+        "HEADLINE: <one engaging sentence about the energy futures snapshot, max 120 chars, no emojis>\n" +
+        "TAGS: <tag1>, <tag2>, <tag3>\n\n" +
+        "CRITICAL: Only mention direction for futures with notable moves (>1%). " +
+        "If you mention crude oil, say whether it is WTI, Brent, or both. " +
+        "Stay factual — never editorialize about politics or causes. " +
+        "If all moved less than 0.5%, say prices were little changed. " +
+        "Prices are ~15 min delayed NYMEX futures, not spot prices.\n\n" +
+        "Example input: Brent Crude $82.10 (+1.2%), WTI Crude $78.45 (+1.1%), Natural Gas $2.31 (-3.4%), RBOB Gasoline $2.51 (+0.9%), Heating Oil $2.84 (+0.8%)\n" +
+        "Example output:\n" +
+        "HEADLINE: Crude futures climb over 1% as natural gas slides sharply\n" +
+        "TAGS: CrudeOil, NaturalGas, EnergyFutures\n\n" +
+        "Tag rules: PascalCase for multi-word tags; keep tags relevant to energy futures or fuel markets; " +
+        "never use generic words like News, Update, Daily, Data.";
+
     private const string CommoditySystemPrompt =
         "You write short, punchy Bluesky captions about energy commodity prices. " +
         "Given current prices and day-over-day % changes, reply with EXACTLY these two lines and nothing else:\n\n" +
@@ -87,6 +104,49 @@ internal static class LmStudioPostGenerator
         "never use generic words like News, Update, Daily, Data.";
 
     private static readonly Regex _nonAlpha = new(@"[^a-zA-Z0-9]", RegexOptions.Compiled);
+
+    public static async Task<(string Headline, string[] Tags)> GenerateYahooFuturesPostAsync(
+        IReadOnlyList<OilPriceEntry> prices)
+    {
+        var fallbackTags     = new[] { "EnergyFutures", "CrudeOil", "NaturalGas" };
+        var fallbackHeadline = $"Energy futures snapshot — {DateTime.Today:yyyy-MM-dd}";
+
+        if (prices.Count == 0) return (fallbackHeadline, fallbackTags);
+
+        static string Fmt(OilPriceEntry e) => e.Code switch
+        {
+            "NATURAL_GAS"                    => $"${e.Price:F3}",
+            "RBOB_GASOLINE" or "HEATING_OIL" => $"${e.Price:F3}",
+            _                                => $"${e.Price:F2}",
+        };
+        static string Delta(OilPriceEntry e)
+        {
+            if (!e.Previous.HasValue || e.Previous.Value == 0) return "";
+            var pct = (e.Price - e.Previous.Value) / e.Previous.Value * 100.0;
+            return $" ({(pct >= 0 ? "+" : "")}{pct:F1}%)";
+        }
+
+        var parts       = prices.Select(e => $"{e.DisplayName} {Fmt(e)}{Delta(e)}");
+        var userMessage = string.Join(", ", parts);
+
+        try
+        {
+            var text = await LmStudioClient.CallAsync(YahooFuturesSystemPrompt, userMessage, 128, 0.4);
+            if (string.IsNullOrEmpty(text))
+            {
+                AppLogger.Log("LM Studio error — using fallback Yahoo futures caption.");
+                return (fallbackHeadline, fallbackTags);
+            }
+            AppLogger.Log($"LM Studio Yahoo futures response: {text.Replace('\n', '|')}");
+            var (headline, _, tags) = Parse(text, fallbackHeadline);
+            return (headline, tags.Length > 0 ? tags : fallbackTags);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"LM Studio unavailable ({ex.Message}) — using fallback Yahoo futures caption.");
+            return (fallbackHeadline, fallbackTags);
+        }
+    }
 
     public static async Task<(string Headline, string[] Tags)> GenerateCommodityPostAsync(CommodityData data)
     {

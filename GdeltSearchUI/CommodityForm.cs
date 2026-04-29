@@ -15,6 +15,7 @@ internal partial class CommodityForm : DataForm
     private Button   _eiaRefreshButton    = null!;
     private Button   _yahooRefreshButton  = null!;
     private Button   _postButton          = null!;
+    private Button   _yahooPostButton     = null!;
 
     private CommodityData? _lastResult;
     private readonly BlueskyPoster _poster = new();
@@ -90,6 +91,20 @@ internal partial class CommodityForm : DataForm
         _postButton.Enabled   = true;
     }
 
+    internal void UpdateYahooPostButton()
+    {
+        if (_lastResult?.OilPrices is null || _lastResult.OilPrices.Count == 0)
+        {
+            _yahooPostButton.Enabled = false;
+            return;
+        }
+        var today  = DateTime.Today.ToString("yyyy-MM-dd");
+        var posted = YahooPostTracker.HasBeenPosted(today);
+        _yahooPostButton.Text      = posted ? $"✓ Posted {today}" : $"Post {today}";
+        _yahooPostButton.BackColor = posted ? DarkTheme.PostButtonPosted : DarkTheme.PostButtonDefault;
+        _yahooPostButton.Enabled   = true;
+    }
+
     // ── Clear helpers (per-source + combined) ─────────────────────────────────
 
     private void ClearEiaPrices()
@@ -109,10 +124,13 @@ internal partial class CommodityForm : DataForm
 
     private void ClearYahooPrices()
     {
+        _yahooPostButton.Enabled   = false;
+        _yahooPostButton.Text      = "Post";
+        _yahooPostButton.BackColor = DarkTheme.PostButtonDefault;
         for (var i = 0; i < _oilPriceLabels.Length; i++)
         {
-            _oilPriceLabels[i].Text         = "—";
-            _oilPriceDeltaLabels[i].Text    = "";
+            _oilPriceLabels[i].Text           = "—";
+            _oilPriceDeltaLabels[i].Text      = "";
             _oilPriceDeltaLabels[i].ForeColor = DarkTheme.TextMuted;
         }
         _yahooStatusLabel.Text = "—";

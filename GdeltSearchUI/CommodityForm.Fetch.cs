@@ -103,6 +103,8 @@ internal partial class CommodityForm
                 }
             }
 
+            UpdateYahooPostButton();
+
             var freshest = livePrices.Count > 0 ? livePrices.Max(p => p.UpdatedAt) : default;
             _yahooStatusLabel.Text = freshest != default
                 ? $"Last updated {freshest.LocalDateTime:HH:mm}  ·  ~15 min delayed"
