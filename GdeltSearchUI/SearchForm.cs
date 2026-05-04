@@ -33,7 +33,7 @@ public sealed partial class SearchForm : Form
         ("Article + Geo", "ArtGeo"),
     ];
 
-    public SearchForm(string? initialQuery = null)
+    public SearchForm(string? initialQuery = null, int defaultTimespanIndex = 0)
     {
         Text = "GDELT Article Search";
         Size = new Size(737, 456);
@@ -45,6 +45,9 @@ public sealed partial class SearchForm : Form
         Controls.Add(BuildGrid());
         Controls.Add(BuildToolbar());
         Controls.Add(BuildStatusBar());
+
+        if (defaultTimespanIndex > 0 && defaultTimespanIndex < Timespans.Length)
+            _timespanBox.SelectedIndex = defaultTimespanIndex;
 
         _autoRefreshTimer.Tick += async (_, _) => await SearchAsync();
 

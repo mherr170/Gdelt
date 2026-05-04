@@ -90,7 +90,7 @@ internal sealed class SettingsDialog : Form
 
     private void OnSave(object? sender, EventArgs e)
     {
-        var handle   = _handleBox.Text.Trim();
+        var handle   = StripInvisible(_handleBox.Text.Trim());
         var password = _passwordBox.Text.Trim();
 
         if (string.IsNullOrEmpty(handle) || string.IsNullOrEmpty(password))
@@ -103,6 +103,12 @@ internal sealed class SettingsDialog : Form
 
         _save(handle, password);
     }
+
+    // Strip invisible Unicode formatting/control chars that can be silently pasted with text.
+    private static string StripInvisible(string s) =>
+        new string(s.Where(c => !char.IsControl(c) && char.GetUnicodeCategory(c)
+            is not System.Globalization.UnicodeCategory.Format
+            and not System.Globalization.UnicodeCategory.OtherNotAssigned).ToArray());
 
     private static Label MakeLabel(string text) => new()
     {

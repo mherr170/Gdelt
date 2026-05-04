@@ -49,27 +49,5 @@ internal partial class DebtForm
         if (p is not null) status += $"  ·  vs {p.RecordDate:yyyy-MM-dd}";
         SetStatus(status);
         SetBusy(false);
-
-        await MaybeAutoPostAsync();
-    }
-
-    private async Task MaybeAutoPostAsync()
-    {
-        if (_lastResult?.Current is null) return;
-
-        var date = _lastResult.Current.RecordDate.ToString("yyyy-MM-dd");
-        if (DebtPostTracker.HasBeenPosted(date))
-        {
-            SetStatus($"Already posted for {date} — skipping.");
-            return;
-        }
-
-        if (CredentialManager.LoadDebtBluesky() is null)
-        {
-            SetStatus($"Not yet posted for {date} — set up Bluesky account to enable auto-post.");
-            return;
-        }
-
-        await PostToBlueskyAsync();
     }
 }

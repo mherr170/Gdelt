@@ -74,7 +74,7 @@ internal static class LmStudioPostGenerator
         "You write short, punchy Bluesky captions about energy futures prices. " +
         "Given near-real-time NYMEX futures prices and day-over-day changes, reply with EXACTLY these two lines and nothing else:\n\n" +
         "HEADLINE: <one engaging sentence about the energy futures snapshot, max 120 chars, no emojis>\n" +
-        "TAGS: <tag1>, <tag2>, <tag3>\n\n" +
+        "TAGS: <tag1>, <tag2>\n\n" +
         "CRITICAL: Only mention direction for futures with notable moves (>1%). " +
         "If you mention crude oil, say whether it is WTI, Brent, or both. " +
         "Stay factual — never editorialize about politics or causes. " +
@@ -83,9 +83,9 @@ internal static class LmStudioPostGenerator
         "Example input: Brent Crude $82.10 (+1.2%), WTI Crude $78.45 (+1.1%), Natural Gas $2.31 (-3.4%), RBOB Gasoline $2.51 (+0.9%), Heating Oil $2.84 (+0.8%)\n" +
         "Example output:\n" +
         "HEADLINE: Crude futures climb over 1% as natural gas slides sharply\n" +
-        "TAGS: CrudeOil, NaturalGas, EnergyFutures\n\n" +
-        "Tag rules: PascalCase for multi-word tags; keep tags relevant to energy futures or fuel markets; " +
-        "never use generic words like News, Update, Daily, Data.";
+        "TAGS: Oil, NatGas\n\n" +
+        "Tag rules: PascalCase for multi-word tags; prefer short high-traffic tags: Oil, NatGas, EnergyMarkets, Commodities, Brent, WTI, RBOB; " +
+        "never use generic words like News, Update, Daily, Data, EnergyFutures, CrudeOil, NaturalGas.";
 
     private const string CommoditySystemPrompt =
         "You write short, punchy Bluesky captions about energy commodity prices. " +
@@ -106,7 +106,7 @@ internal static class LmStudioPostGenerator
     private static readonly Regex _nonAlpha = new(@"[^a-zA-Z0-9]", RegexOptions.Compiled);
 
     public static async Task<(string Headline, string[] Tags)> GenerateYahooFuturesPostAsync(
-        IReadOnlyList<OilPriceEntry> prices)
+        IReadOnlyList<OilPriceEntry> prices, Dictionary<string, double>? lastPostPrices = null)
     {
         var fallbackTags     = new[] { "EnergyFutures", "CrudeOil", "NaturalGas" };
         var fallbackHeadline = $"Energy futures snapshot — {DateTime.Today:yyyy-MM-dd}";
@@ -119,10 +119,14 @@ internal static class LmStudioPostGenerator
             "RBOB_GASOLINE" or "HEATING_OIL" => $"${e.Price:F3}",
             _                                => $"${e.Price:F2}",
         };
-        static string Delta(OilPriceEntry e)
+        string Delta(OilPriceEntry e)
         {
-            if (!e.Previous.HasValue || e.Previous.Value == 0) return "";
-            var pct = (e.Price - e.Previous.Value) / e.Previous.Value * 100.0;
+            double? baseline = lastPostPrices is not null &&
+                               lastPostPrices.TryGetValue(e.Code, out var lp) && lp != 0
+                ? lp
+                : e.Previous;
+            if (!baseline.HasValue || baseline.Value == 0) return "";
+            var pct = (e.Price - baseline.Value) / baseline.Value * 100.0;
             return $" ({(pct >= 0 ? "+" : "")}{pct:F1}%)";
         }
 
