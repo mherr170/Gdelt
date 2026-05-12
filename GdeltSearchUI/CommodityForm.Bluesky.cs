@@ -27,12 +27,11 @@ internal partial class CommodityForm
         var (headline, tags) = await LmStudioPostGenerator.GenerateYahooFuturesPostAsync(_yahooData, lastPostPrices);
         var text = YahooAutoPost.BuildPostText(_yahooData, headline, tags, lastPostPrices);
 
-        AppLogger.Log($"Yahoo Bluesky: posting as '{creds.Value.Handle}'");
-        var previewHistory = savedHistory.Append(new CommodityHistoryPoint
-        {
-            Timestamp = DateTimeOffset.Now,
-            Prices    = _yahooData.ToDictionary(e => e.Code, e => e.Price),
-        }).ToList();
+        AppLogger.Log($"Yahoo Bluesky: manual post as @{creds.Value.Handle}");
+
+        // Save snapshot before posting — data preserved even if post fails, same timestamp in chart
+        var snapshot       = YahooPriceCache.Append(_yahooData);
+        var previewHistory = savedHistory.Append(snapshot).ToList();
 
         var png = await Task.Run(() => YahooChartGenerator.RenderPng(previewHistory));
         (bool ok, string? error) result;
@@ -54,7 +53,6 @@ internal partial class CommodityForm
         var (ok, error) = result;
         if (ok)
         {
-            YahooPriceCache.Append(_yahooData);
             YahooPostTracker.MarkPosted(DateTime.Today.ToString("yyyy-MM-dd"));
             SetStatus($"Posted Yahoo futures to Bluesky at {DateTime.Now:HH:mm}.");
         }

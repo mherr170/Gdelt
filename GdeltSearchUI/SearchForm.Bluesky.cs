@@ -4,12 +4,15 @@ public sealed partial class SearchForm
 {
     private async Task PostToBlueskyAsync(string title, string url)
     {
-        var creds = CredentialManager.Load();
+        var loader = _credLoader ?? CredentialManager.Load;
+        var saver  = _credSaver  ?? CredentialManager.Save;
+
+        var creds = loader();
         if (creds is null)
         {
-            using var dlg = new SettingsDialog();
+            using var dlg = new SettingsDialog(loader, saver, _credTitle);
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
-            creds = CredentialManager.Load();
+            creds = loader();
             if (creds is null) return;
         }
 

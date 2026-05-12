@@ -47,53 +47,6 @@ internal partial class QuakeForm
         SetBusy(false);
     }
 
-    private async Task AutoPostAsync()
-    {
-        var creds = CredentialManager.LoadQuakeBluesky();
-        if (creds is null)
-        {
-            SetStatus("Auto-post: no Bluesky account configured — use ⚙ Account.");
-            return;
-        }
-
-        List<QuakeEvent> events;
-        using (var client = new QuakeApiClient())
-        {
-            var (e, err) = await client.GetRecentAsync(minMagnitude: 5.0, hours: 2);
-            if (err is not null || e.Count == 0) return;
-            events = e;
-        }
-
-        var unseen = events.Where(q => q.Id.Length > 0 && !QuakePostTracker.HasBeenPosted(q.Id)).ToList();
-        if (unseen.Count == 0)
-        {
-            SetStatus($"Auto-post: no new M5+ events  ·  checked {DateTime.Now:HH:mm}");
-            return;
-        }
-
-        foreach (var quake in unseen)
-        {
-            SetStatus($"Auto-posting M{quake.Magnitude:F1} — {quake.Place}…");
-            var (headline, body, tags) = await LmStudioPostGenerator.GenerateQuakePostAsync(quake);
-            var text = BuildPostText(quake, headline, body, tags);
-            var (ok, error) = await _poster.PostTextAsync(
-                creds.Value.Handle, creds.Value.Password, text, CancellationToken.None);
-
-            if (ok)
-            {
-                QuakePostTracker.MarkPosted(quake.Id);
-                AppLogger.Log($"Auto-posted quake {quake.Id}: M{quake.Magnitude:F1} {quake.Place}");
-                SetStatus($"Auto-posted M{quake.Magnitude:F1} — {quake.Place}  ·  {DateTime.Now:HH:mm}");
-            }
-            else
-            {
-                AppLogger.Log($"Auto-post failed for {quake.Id}: {error}");
-            }
-
-            await Task.Delay(2000);
-        }
-    }
-
     private static Color MagColor(double mag) => mag switch
     {
         >= 7.0 => Color.FromArgb(0xFF, 0x55, 0x55),

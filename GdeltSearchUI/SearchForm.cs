@@ -18,6 +18,10 @@ public sealed partial class SearchForm : Form
     private CancellationTokenSource? _cts;
     private Font? _underlineFont;
 
+    private readonly Func<(string Handle, string Password)?>? _credLoader;
+    private readonly Action<string, string>?                   _credSaver;
+    private readonly string                                    _credTitle = "Bluesky Account";
+
     private static readonly (string Label, int Hours)[] Timespans =
     [
         ("1 hour",    1),
@@ -29,12 +33,17 @@ public sealed partial class SearchForm : Form
 
     private static readonly (string Label, string Value)[] Modes =
     [
-        ("Article List",  "ArtList"),
-        ("Article + Geo", "ArtGeo"),
+        ("Article List", "ArtList"),
     ];
 
-    public SearchForm(string? initialQuery = null, int defaultTimespanIndex = 0)
+    public SearchForm(string? initialQuery = null, int defaultTimespanIndex = 0,
+        Func<(string Handle, string Password)?>? credLoader = null,
+        Action<string, string>? credSaver = null,
+        string credTitle = "Bluesky Account")
     {
+        _credLoader = credLoader;
+        _credSaver  = credSaver;
+        _credTitle  = credTitle;
         Text = "GDELT Article Search";
         Size = new Size(737, 456);
         MinimumSize = new Size(536, 335);

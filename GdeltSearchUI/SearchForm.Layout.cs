@@ -104,7 +104,9 @@ public sealed partial class SearchForm
         accountBtn.FlatAppearance.BorderSize = 0;
         accountBtn.Click += (_, _) =>
         {
-            using var dlg = new SettingsDialog();
+            using var dlg = _credLoader is not null && _credSaver is not null
+                ? new SettingsDialog(_credLoader, _credSaver, _credTitle)
+                : new SettingsDialog();
             dlg.ShowDialog(this);
         };
         toolbar.Controls.Add(accountBtn, 6, 0);

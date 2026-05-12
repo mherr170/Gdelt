@@ -22,13 +22,11 @@ internal partial class QuakeForm : DataForm
     private ComboBox    _timeBox      = null!;
     private Button      _refreshBtn   = null!;
     private Button      _postBtn      = null!;
-    private CheckBox    _autoPostCheck = null!;
     private DataGridView _grid        = null!;
     private ToolStripStatusLabel _statusLabel = null!;
     private ToolStripProgressBar _progress   = null!;
 
     private readonly BlueskyPoster _poster = new();
-    private readonly System.Windows.Forms.Timer _autoTimer = new() { Interval = 10 * 60 * 1000 };
     private CancellationTokenSource? _cts;
 
     public QuakeForm()
@@ -43,8 +41,6 @@ internal partial class QuakeForm : DataForm
         Controls.Add(BuildGrid());
         Controls.Add(BuildToolbar());
         Controls.Add(BuildStatusBar());
-
-        _autoTimer.Tick += async (_, _) => await AutoPostAsync();
 
         Shown += async (_, _) => await FetchAsync();
     }
@@ -61,7 +57,7 @@ internal partial class QuakeForm : DataForm
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _poster.Dispose(); _cts?.Dispose(); _autoTimer.Dispose(); }
+        if (disposing) { _poster.Dispose(); _cts?.Dispose(); }
         base.Dispose(disposing);
     }
 }

@@ -9,13 +9,12 @@ internal partial class QuakeForm
             Dock = DockStyle.Top,
             Height = 48,
             Padding = new Padding(8, 8, 8, 4),
-            ColumnCount = 6,
+            ColumnCount = 5,
             BackColor = DarkTheme.Surface,
         };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 88));
 
@@ -45,32 +44,6 @@ internal partial class QuakeForm
         _timeBox.SelectedIndex = 0; // default past 24h
         toolbar.Controls.Add(_timeBox, 1, 0);
 
-        _autoPostCheck = new CheckBox
-        {
-            Text      = "Auto-post M5+",
-            Dock      = DockStyle.Fill,
-            ForeColor = DarkTheme.TextPrimary,
-            BackColor = Color.Transparent,
-            FlatStyle = FlatStyle.Flat,
-            Cursor    = Cursors.Hand,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Padding   = new Padding(4, 0, 0, 0),
-        };
-        _autoPostCheck.CheckedChanged += async (_, _) =>
-        {
-            if (_autoPostCheck.Checked)
-            {
-                _autoTimer.Start();
-                await AutoPostAsync();
-            }
-            else
-            {
-                _autoTimer.Stop();
-                SetStatus("Auto-post disabled.");
-            }
-        };
-        toolbar.Controls.Add(_autoPostCheck, 2, 0);
-
         _refreshBtn = new Button
         {
             Text = "Refresh",
@@ -83,7 +56,7 @@ internal partial class QuakeForm
         };
         _refreshBtn.FlatAppearance.BorderSize = 0;
         _refreshBtn.Click += async (_, _) => await FetchAsync();
-        toolbar.Controls.Add(_refreshBtn, 3, 0);
+        toolbar.Controls.Add(_refreshBtn, 2, 0);
 
         _postBtn = new Button
         {
@@ -98,7 +71,7 @@ internal partial class QuakeForm
         };
         _postBtn.FlatAppearance.BorderSize = 0;
         _postBtn.Click += async (_, _) => await PostToBlueskyAsync();
-        toolbar.Controls.Add(_postBtn, 4, 0);
+        toolbar.Controls.Add(_postBtn, 3, 0);
 
         var accountBtn = new Button
         {
@@ -118,7 +91,7 @@ internal partial class QuakeForm
                 "Bluesky Account — Earthquakes");
             dlg.ShowDialog(this);
         };
-        toolbar.Controls.Add(accountBtn, 5, 0);
+        toolbar.Controls.Add(accountBtn, 4, 0);
 
         return toolbar;
     }
