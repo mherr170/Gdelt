@@ -11,8 +11,9 @@ internal static class YahooPostTracker
         "GdeltAutoPost", "yahoo_futures_last_post_ts.txt");
 
     private static readonly HashSet<string> _posted = PostTrackerStore.Load(_filePath);
+    private static readonly object _lock = new();
 
-    public static bool HasBeenPosted(string date) => _posted.Contains(date);
+    public static bool HasBeenPosted(string date) { lock (_lock) return _posted.Contains(date); }
 
     public static DateTime? GetLastPostedAt()
     {
@@ -34,7 +35,7 @@ internal static class YahooPostTracker
         }
         catch { }
 
-        _posted.Add(date);
+        lock (_lock) _posted.Add(date);
         PostTrackerStore.Append(_filePath, date);
     }
 }

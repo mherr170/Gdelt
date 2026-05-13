@@ -7,8 +7,9 @@ internal static class QuakePostTracker
         "GdeltAutoPost", "posted_quakes.txt");
 
     private static readonly HashSet<string> _posted = PostTrackerStore.Load(_filePath);
+    private static readonly object _lock = new();
 
-    public static bool HasBeenPosted(string id) => _posted.Contains(id);
+    public static bool HasBeenPosted(string id) { lock (_lock) return _posted.Contains(id); }
 
     public static DateTime? GetLastPostedAt()
     {
@@ -18,7 +19,7 @@ internal static class QuakePostTracker
 
     public static void MarkPosted(string id)
     {
-        _posted.Add(id);
+        lock (_lock) _posted.Add(id);
         PostTrackerStore.Append(_filePath, id);
     }
 }

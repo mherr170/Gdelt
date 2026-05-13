@@ -110,8 +110,9 @@ internal static class GunViolenceAutoPost
         int posted = 0;
         using var poster = new BlueskyPoster();
 
-        foreach (var article in candidates)
+        for (int i = 0; i < candidates.Count; i++)
         {
+            var article = candidates[i];
             if (posted >= MaxPerRun) break;
             ct.ThrowIfCancellationRequested();
 
@@ -142,7 +143,7 @@ internal static class GunViolenceAutoPost
                 PostLogger.Error(W, $"Post failed for \"{article.Title}\": {error}");
             }
 
-            if (posted < MaxPerRun && candidates.IndexOf(article) < candidates.Count - 1)
+            if (posted < MaxPerRun && i < candidates.Count - 1)
                 await Task.Delay(2000, ct);
         }
 

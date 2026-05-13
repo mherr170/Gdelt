@@ -2,28 +2,30 @@ namespace GdeltSearchUI;
 
 internal sealed class LauncherForm : Form
 {
-    private Button _gasPriceBtn  = null!;
-    private Button _debtBtn      = null!;
-    private Button _commodityBtn = null!;
-    private Button _congressBtn  = null!;
-    private Button _apodBtn      = null!;
-    private Button _stockBtn     = null!;
-    private Button _weatherBtn   = null!;
+    private Button _gasPriceBtn      = null!;
+    private Button _debtBtn          = null!;
+    private Button _commodityBtn     = null!;
+    private Button _congressBtn      = null!;
+    private Button _apodBtn          = null!;
+    private Button _stockBtn         = null!;
+    private Button _weatherBtn       = null!;
+    private Button _blueskyMetricsBtn = null!;
 
-    private Label _debtStat        = null!;
-    private Label _gasStat         = null!;
-    private Label _energyStat      = null!;
-    private Label _congressStat    = null!;
-    private Label _apodStat        = null!;
-    private Label _stockStat       = null!;
-    private Label _weatherStat     = null!;
-    private Label _quakeStat       = null!;
-    private Label _gunViolenceStat = null!;
+    private Label _debtStat          = null!;
+    private Label _gasStat           = null!;
+    private Label _energyStat        = null!;
+    private Label _congressStat      = null!;
+    private Label _apodStat          = null!;
+    private Label _stockStat         = null!;
+    private Label _weatherStat       = null!;
+    private Label _quakeStat         = null!;
+    private Label _gunViolenceStat   = null!;
+    private Label _blueskyMetricsStat = null!;
 
     public LauncherForm()
     {
         Text            = "GDELT Dashboard";
-        Size            = new Size(540, 424);
+        Size            = new Size(540, 462);
         MinimumSize     = new Size(400, 220);
         StartPosition   = FormStartPosition.CenterScreen;
         Font            = new Font("Segoe UI", 9.5f);
@@ -35,6 +37,7 @@ internal sealed class LauncherForm : Form
         Controls.Add(BuildHeader());
 
         RefreshAllStatus();
+
 
         var refreshTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
         refreshTimer.Tick += (_, _) => RefreshAllStatus();
@@ -52,6 +55,16 @@ internal sealed class LauncherForm : Form
         RefreshWeatherStatus();
         RefreshQuakeStatus();
         RefreshGunViolenceStatus();
+        RefreshBlueskyMetricsStatus();
+    }
+
+    private void RefreshBlueskyMetricsStatus()
+    {
+        var hasCred = CredentialManager.Load() is not null;
+        _blueskyMetricsStat.Text      = hasCred ? "✓ Account configured" : "⚠ No default account set";
+        _blueskyMetricsStat.ForeColor = hasCred
+            ? Color.FromArgb(0x4F, 0xB5, 0x6E)
+            : Color.FromArgb(0xB8, 0x76, 0x0B);
     }
 
     // ── Status refresh (reads local tracker files — no API calls) ─────────────
@@ -164,14 +177,14 @@ internal sealed class LauncherForm : Form
         {
             Dock        = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount    = 9,
+            RowCount    = 10,
             Padding     = new Padding(12, 8, 12, 12),
             BackColor   = DarkTheme.Background,
         };
 
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 9; i++)
+        for (int i = 0; i < 10; i++)
             table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         table.Controls.Add(MakeGunViolenceButton(), 0, 0);
@@ -209,6 +222,10 @@ internal sealed class LauncherForm : Form
         table.Controls.Add(MakeWeatherButton(), 0, 8);
         _weatherStat = MakeStatLabel("");
         table.Controls.Add(_weatherStat, 1, 8);
+
+        table.Controls.Add(MakeBlueskyMetricsButton(), 0, 9);
+        _blueskyMetricsStat = MakeStatLabel("");
+        table.Controls.Add(_blueskyMetricsStat, 1, 9);
 
         return table;
     }
@@ -339,6 +356,18 @@ internal sealed class LauncherForm : Form
             form.Show();
         };
         return _apodBtn;
+    }
+
+    private Button MakeBlueskyMetricsButton()
+    {
+        _blueskyMetricsBtn = MakeButton("☁ Bsky Stats", Color.FromArgb(0x00, 0x6A, 0xB0));
+        _blueskyMetricsBtn.Click += (_, _) =>
+        {
+            var form = new BlueskyMetricsHub();
+            form.FormClosed += (_, _) => RefreshBlueskyMetricsStatus();
+            form.Show();
+        };
+        return _blueskyMetricsBtn;
     }
 
     private static Button MakeButton(string label, Color backColor)

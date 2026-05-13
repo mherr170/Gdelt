@@ -52,8 +52,9 @@ internal static class QuakeAutoPost
         int posted = 0;
         using var poster = new BlueskyPoster();
 
-        foreach (var quake in unseen)
+        for (int i = 0; i < unseen.Count; i++)
         {
+            var quake = unseen[i];
             ct.ThrowIfCancellationRequested();
 
             PostLogger.Info(W, $"Posting M{quake.Magnitude:F1} — {quake.Place} ({quake.Id})…");
@@ -117,7 +118,7 @@ internal static class QuakeAutoPost
                 PostLogger.Error(W, $"Post failed for {quake.Id}: {result.Error}");
             }
 
-            if (unseen.IndexOf(quake) < unseen.Count - 1)
+            if (i < unseen.Count - 1)
                 await Task.Delay(2000, ct);
         }
 

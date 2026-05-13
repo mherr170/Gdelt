@@ -19,50 +19,55 @@ internal partial class ApodForm
         }
 
         _postBtn.Enabled = false;
-        SetStatus("Generating caption…");
-
-        string headline; string[] tags;
-        try   { (headline, tags) = await LmStudioPostGenerator.GenerateApodPostAsync(_current); }
-        catch { headline = _current.Title; tags = ["Astrophotography", "Space"]; }
-
-        var text = ApodAutoPost.BuildPostText(_current, headline, tags);
-
-        SetStatus("Posting to Bluesky…");
-
-        (bool ok, string? error) result;
-        if (!string.IsNullOrWhiteSpace(_current.ImageUrl))
+        try
         {
-            var png = await ApodAutoPost.TryDownloadImageAsync(_current.ImageUrl, CancellationToken.None);
-            if (png.Length > 0)
+            SetStatus("Generating caption…");
+
+            string headline; string[] tags;
+            try   { (headline, tags) = await LmStudioPostGenerator.GenerateApodPostAsync(_current); }
+            catch { headline = _current.Title; tags = ["Astrophotography", "Space"]; }
+
+            var text = ApodAutoPost.BuildPostText(_current, headline, tags);
+
+            SetStatus("Posting to Bluesky…");
+
+            (bool ok, string? error) result;
+            if (!string.IsNullOrWhiteSpace(_current.ImageUrl))
             {
-                var alt = $"NASA Astronomy Picture of the Day for {_current.Date}: {_current.Title}";
-                result  = await _poster.PostTextWithImageAsync(
-                    creds.Value.Handle, creds.Value.Password, text, png, alt, CancellationToken.None);
+                var png = await ApodAutoPost.TryDownloadImageAsync(_current.ImageUrl, CancellationToken.None);
+                if (png.Length > 0)
+                {
+                    var alt = $"NASA Astronomy Picture of the Day for {_current.Date}: {_current.Title}";
+                    result  = await _poster.PostTextWithImageAsync(
+                        creds.Value.Handle, creds.Value.Password, text, png, alt, CancellationToken.None);
+                }
+                else
+                {
+                    result = await _poster.PostTextAsync(
+                        creds.Value.Handle, creds.Value.Password, text, CancellationToken.None);
+                }
             }
             else
             {
                 result = await _poster.PostTextAsync(
                     creds.Value.Handle, creds.Value.Password, text, CancellationToken.None);
             }
-        }
-        else
-        {
-            result = await _poster.PostTextAsync(
-                creds.Value.Handle, creds.Value.Password, text, CancellationToken.None);
-        }
 
-        if (result.ok)
-        {
-            ApodPostTracker.MarkPosted(_current.Date);
-            SetStatus($"Posted to Bluesky at {DateTime.Now:HH:mm}.");
+            if (result.ok)
+            {
+                ApodPostTracker.MarkPosted(_current.Date);
+                SetStatus($"Posted to Bluesky at {DateTime.Now:HH:mm}.");
+            }
+            else
+            {
+                ShowError(result.error!);
+                SetStatus("Post failed — see details.");
+            }
         }
-        else
+        finally
         {
-            ShowError(result.error!);
-            SetStatus("Post failed — see details.");
+            UpdatePostButton();
         }
-
-        UpdatePostButton();
     }
 
 

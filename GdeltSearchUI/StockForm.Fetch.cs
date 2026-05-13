@@ -55,7 +55,7 @@ internal partial class StockForm
                 var png = await Task.Run(() => StockChartGenerator.RenderPng(entries));
                 if (png.Length > 0)
                 {
-                    using var ms  = new MemoryStream(png);
+                    var ms  = new MemoryStream(png);
                     var img = System.Drawing.Image.FromStream(ms);
                     var old = _chartBox.Image;
                     _chartBox.Image = img;

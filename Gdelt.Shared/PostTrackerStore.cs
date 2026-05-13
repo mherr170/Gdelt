@@ -25,7 +25,11 @@ internal static class PostTrackerStore
         using var mutex = new Mutex(false, mutexName);
         try
         {
-            mutex.WaitOne(TimeSpan.FromSeconds(5));
+            if (!mutex.WaitOne(TimeSpan.FromSeconds(5)))
+            {
+                AppLogger.Log($"PostTrackerStore mutex timeout ({Path.GetFileName(filePath)}) — skipping write");
+                return;
+            }
 
             // Re-read inside the lock — another process may have written this value
             // after we loaded our in-memory HashSet but before we got here.

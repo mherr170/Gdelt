@@ -13,11 +13,19 @@ internal static class SecretStore
 
     public static void Save(string key, string username, string password)
     {
-        Directory.CreateDirectory(_dir);
-        var combined = $"{username}\n{password}";
-        var plain    = Encoding.UTF8.GetBytes(combined);
-        var cipher   = ProtectedData.Protect(plain, null, DataProtectionScope.LocalMachine);
-        File.WriteAllBytes(Path.Combine(_dir, Filename(key)), cipher);
+        try
+        {
+            Directory.CreateDirectory(_dir);
+            var combined = $"{username}\n{password}";
+            var plain    = Encoding.UTF8.GetBytes(combined);
+            var cipher   = ProtectedData.Protect(plain, null, DataProtectionScope.LocalMachine);
+            File.WriteAllBytes(Path.Combine(_dir, Filename(key)), cipher);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"SecretStore save failed ({key}): {ex.Message}");
+            throw;
+        }
     }
 
     public static (string Username, string Password)? Load(string key)

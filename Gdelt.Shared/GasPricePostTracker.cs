@@ -11,13 +11,17 @@ internal static class GasPricePostTracker
         "GdeltAutoPost", "gasprices_last_post_ts.txt");
 
     private static readonly HashSet<string> _posted = PostTrackerStore.Load(_filePath);
+    private static readonly object _lock = new();
 
-    public static bool HasBeenPosted(string period) => _posted.Contains(period);
+    public static bool HasBeenPosted(string period) { lock (_lock) return _posted.Contains(period); }
 
     public static bool IsCurrentWeekPosted()
     {
-        var cutoff = DateTime.Today.AddDays(-7);
-        return _posted.Any(p => DateTime.TryParse(p, out var d) && d >= cutoff);
+        lock (_lock)
+        {
+            var cutoff = DateTime.Today.AddDays(-7);
+            return _posted.Any(p => DateTime.TryParse(p, out var d) && d >= cutoff);
+        }
     }
 
     public static DateTime? GetLastPostedAt()
@@ -40,7 +44,7 @@ internal static class GasPricePostTracker
         }
         catch { }
 
-        _posted.Add(period);
+        lock (_lock) _posted.Add(period);
         PostTrackerStore.Append(_filePath, period);
     }
 }

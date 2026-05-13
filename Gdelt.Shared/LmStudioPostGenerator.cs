@@ -124,7 +124,7 @@ internal static class LmStudioPostGenerator
 
     private static readonly Regex _nonAlpha = new(@"[^a-zA-Z0-9]", RegexOptions.Compiled);
 
-    public static async Task<List<GdeltArticle>> DeduplicateBySameEventAsync(List<GdeltArticle> articles)
+    public static async Task<List<GdeltArticle>> DeduplicateBySameEventAsync(List<GdeltArticle> articles, CancellationToken ct = default)
     {
         if (articles.Count <= 1) return articles;
 
@@ -133,7 +133,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var response = await LmStudioClient.CallAsync(GunViolenceDedupePrompt, userMessage, 64, 0.0);
+            var response = await LmStudioClient.CallAsync(GunViolenceDedupePrompt, userMessage, 64, 0.0, ct);
             if (string.IsNullOrWhiteSpace(response)) return articles;
 
             var kept = response
@@ -153,11 +153,11 @@ internal static class LmStudioPostGenerator
         }
     }
 
-    public static async Task<bool> IsUSGunHomicideAsync(string headline)
+    public static async Task<bool> IsUSGunHomicideAsync(string headline, CancellationToken ct = default)
     {
         try
         {
-            var response = await LmStudioClient.CallAsync(GunViolenceClassifierPrompt, headline, 8, 0.0);
+            var response = await LmStudioClient.CallAsync(GunViolenceClassifierPrompt, headline, 8, 0.0, ct);
             return response.Trim().StartsWith("YES", StringComparison.OrdinalIgnoreCase);
         }
         catch
@@ -168,7 +168,8 @@ internal static class LmStudioPostGenerator
     }
 
     public static async Task<(string Headline, string[] Tags)> GenerateYahooFuturesPostAsync(
-        IReadOnlyList<OilPriceEntry> prices, Dictionary<string, double>? lastPostPrices = null)
+        IReadOnlyList<OilPriceEntry> prices, Dictionary<string, double>? lastPostPrices = null,
+        CancellationToken ct = default)
     {
         var fallbackTags     = new[] { "EnergyFutures", "CrudeOil", "NaturalGas" };
         var fallbackHeadline = $"Energy futures snapshot — {DateTime.Today:yyyy-MM-dd}";
@@ -197,7 +198,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(YahooFuturesSystemPrompt, userMessage, 128, 0.4);
+            var text = await LmStudioClient.CallAsync(YahooFuturesSystemPrompt, userMessage, 128, 0.4, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback Yahoo futures caption.");
@@ -214,7 +215,7 @@ internal static class LmStudioPostGenerator
         }
     }
 
-    public static async Task<(string Headline, string[] Tags)> GenerateCommodityPostAsync(CommodityData data)
+    public static async Task<(string Headline, string[] Tags)> GenerateCommodityPostAsync(CommodityData data, CancellationToken ct = default)
     {
         var fallbackTags = new[] { "CommodityMarkets", "CrudeOil", "GoldPrice" };
         var fallbackHeadline = $"Commodity market snapshot — {DateTime.Today:yyyy-MM-dd}";
@@ -240,7 +241,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(CommoditySystemPrompt, userMessage, 128, 0.4);
+            var text = await LmStudioClient.CallAsync(CommoditySystemPrompt, userMessage, 128, 0.4, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback commodity caption.");
@@ -257,7 +258,7 @@ internal static class LmStudioPostGenerator
         }
     }
 
-    public static async Task<(string Headline, string Body, string[] Tags)> GenerateQuakePostAsync(QuakeEvent quake)
+    public static async Task<(string Headline, string Body, string[] Tags)> GenerateQuakePostAsync(QuakeEvent quake, CancellationToken ct = default)
     {
         var fallbackTags     = new[] { "Earthquake", quake.Place.Split(',').Last().Trim().Replace(" ", ""), "Seismic" };
         var fallbackHeadline = $"M {quake.Magnitude:F1} earthquake — {quake.Place}";
@@ -269,7 +270,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(QuakeSystemPrompt, userMessage, 200, 0.4);
+            var text = await LmStudioClient.CallAsync(QuakeSystemPrompt, userMessage, 200, 0.4, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback quake caption.");
@@ -287,7 +288,7 @@ internal static class LmStudioPostGenerator
         }
     }
 
-    public static async Task<(string Headline, string[] Tags)> GenerateGasPricePostAsync(NationalGasPrices prices)
+    public static async Task<(string Headline, string[] Tags)> GenerateGasPricePostAsync(NationalGasPrices prices, CancellationToken ct = default)
     {
         var fallbackTags = new[] { "GasPrices", "Gas", "Inflation" };
         var fallbackHeadline = $"US national average gas prices for the week of {prices.Period}";
@@ -326,7 +327,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(GasPriceSystemPrompt, userMessage, 128, 0.4);
+            var text = await LmStudioClient.CallAsync(GasPriceSystemPrompt, userMessage, 128, 0.4, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback gas price caption.");
@@ -356,7 +357,7 @@ internal static class LmStudioPostGenerator
         }
     }
 
-    public static async Task<(string Headline, string[] Tags)> GenerateDebtPostAsync(NationalDebt debt)
+    public static async Task<(string Headline, string[] Tags)> GenerateDebtPostAsync(NationalDebt debt, CancellationToken ct = default)
     {
         var fallbackTags = new[] { "NationalDebt", "USTreasury", "FiscalPolicy" };
         var date = debt.Current?.RecordDate.ToString("yyyy-MM-dd") ?? "today";
@@ -384,7 +385,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(DebtSystemPrompt, userMessage, 128, 0.4);
+            var text = await LmStudioClient.CallAsync(DebtSystemPrompt, userMessage, 128, 0.4, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback debt caption.");
@@ -436,7 +437,7 @@ internal static class LmStudioPostGenerator
         "PascalCase; never use generic words like Weather, Alert, Warning, NWS, NOAA, Storm.";
 
     public static async Task<(string Headline, string[] Tags)> GenerateStockPostAsync(
-        IReadOnlyList<StockEntry> entries)
+        IReadOnlyList<StockEntry> entries, CancellationToken ct = default)
     {
         var fallbackTags     = new[] { "StockMarket", "WallStreet" };
         var fallbackHeadline = $"US stock market close — {DateTime.Today:yyyy-MM-dd}";
@@ -448,7 +449,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(StockSystemPrompt, userMessage, 128, 0.4);
+            var text = await LmStudioClient.CallAsync(StockSystemPrompt, userMessage, 128, 0.4, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback stock caption.");
@@ -468,7 +469,7 @@ internal static class LmStudioPostGenerator
             e.Symbol == "^DJI" ? $"{e.Price:N0}" : $"{e.Price:N2}";
     }
 
-    public static async Task<(string Headline, string[] Tags)> GenerateWeatherAlertPostAsync(WeatherAlert alert)
+    public static async Task<(string Headline, string[] Tags)> GenerateWeatherAlertPostAsync(WeatherAlert alert, CancellationToken ct = default)
     {
         var fallbackTags     = new[] { EventTag(alert.Event), "WeatherAlert" };
         var fallbackHeadline = TrimTo(alert.Headline.Length > 0 ? alert.Headline : alert.Event, 130);
@@ -478,7 +479,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(WeatherSystemPrompt, userMessage, 128, 0.3);
+            var text = await LmStudioClient.CallAsync(WeatherSystemPrompt, userMessage, 128, 0.3, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback weather caption.");
@@ -514,7 +515,7 @@ internal static class LmStudioPostGenerator
         "Example output:\n" +
         "TAGS: Nebula, StarFormation, Hubble, DeepSpace";
 
-    public static async Task<(string Headline, string[] Tags)> GenerateApodPostAsync(ApodEntry entry)
+    public static async Task<(string Headline, string[] Tags)> GenerateApodPostAsync(ApodEntry entry, CancellationToken ct = default)
     {
         var fallbackTags     = new[] { "Astrophotography", "Space" };
         var fallbackHeadline = entry.Title;
@@ -526,7 +527,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(ApodSystemPrompt, userMessage, 160, 0.5);
+            var text = await LmStudioClient.CallAsync(ApodSystemPrompt, userMessage, 160, 0.5, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback APOD caption.");
@@ -560,7 +561,7 @@ internal static class LmStudioPostGenerator
         "Senate, House, Nominations, Budget, Healthcare, Immigration, Defense, Infrastructure, Bipartisan; " +
         "PascalCase for multi-word tags; never use generic words like Vote, Bill, Congress, News, Update, Law.";
 
-    public static async Task<(string Headline, string[] Tags)> GenerateCongressPostAsync(CongressVote vote)
+    public static async Task<(string Headline, string[] Tags)> GenerateCongressPostAsync(CongressVote vote, CancellationToken ct = default)
     {
         var chamber    = vote.Chamber.Equals("Senate", StringComparison.OrdinalIgnoreCase) ? "Senate" : "House";
         var fallbackTags = new[] { chamber, "CongressVotes" };
@@ -573,7 +574,7 @@ internal static class LmStudioPostGenerator
 
         try
         {
-            var text = await LmStudioClient.CallAsync(CongressSystemPrompt, userMessage, 128, 0.3);
+            var text = await LmStudioClient.CallAsync(CongressSystemPrompt, userMessage, 128, 0.3, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using fallback Congress caption.");
@@ -592,11 +593,11 @@ internal static class LmStudioPostGenerator
         static string TrimTo(string s, int max) => s.Length <= max ? s : s[..(max - 1)] + "…";
     }
 
-    public static async Task<(string Headline, string[] Tags)> GenerateAsync(string rawTitle)
+    public static async Task<(string Headline, string[] Tags)> GenerateAsync(string rawTitle, CancellationToken ct = default)
     {
         try
         {
-            var text = await LmStudioClient.CallAsync(SystemPrompt, rawTitle, 128, 0.2);
+            var text = await LmStudioClient.CallAsync(SystemPrompt, rawTitle, 128, 0.2, ct);
             if (string.IsNullOrEmpty(text))
             {
                 AppLogger.Log("LM Studio error — using raw title + rule-based tags.");

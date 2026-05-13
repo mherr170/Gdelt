@@ -11,13 +11,17 @@ internal static class DebtPostTracker
         "GdeltAutoPost", "debt_last_post_ts.txt");
 
     private static readonly HashSet<string> _posted = PostTrackerStore.Load(_filePath);
+    private static readonly object _lock = new();
 
-    public static bool HasBeenPosted(string recordDate) => _posted.Contains(recordDate);
+    public static bool HasBeenPosted(string recordDate) { lock (_lock) return _posted.Contains(recordDate); }
 
     public static bool IsTodayPosted()
     {
-        var cutoff = DateTime.Today.AddDays(-7);
-        return _posted.Any(p => DateTime.TryParse(p, out var d) && d >= cutoff);
+        lock (_lock)
+        {
+            var cutoff = DateTime.Today.AddDays(-7);
+            return _posted.Any(p => DateTime.TryParse(p, out var d) && d >= cutoff);
+        }
     }
 
     public static DateTime? GetLastPostedAt()
@@ -40,7 +44,7 @@ internal static class DebtPostTracker
         }
         catch { }
 
-        _posted.Add(recordDate);
+        lock (_lock) _posted.Add(recordDate);
         PostTrackerStore.Append(_filePath, recordDate);
     }
 }

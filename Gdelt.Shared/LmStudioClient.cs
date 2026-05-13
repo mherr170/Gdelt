@@ -10,7 +10,8 @@ internal static class LmStudioClient
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(45) };
 
     public static async Task<string> CallAsync(
-        string systemPrompt, string userMessage, int maxTokens, double temperature)
+        string systemPrompt, string userMessage, int maxTokens, double temperature,
+        CancellationToken ct = default)
     {
         var payload = new
         {
@@ -24,14 +25,14 @@ internal static class LmStudioClient
             temperature,
         };
 
-        var response = await _http.PostAsJsonAsync(Endpoint, payload);
+        var response = await _http.PostAsJsonAsync(Endpoint, payload, ct);
         if (!response.IsSuccessStatusCode)
         {
             AppLogger.Log($"LM Studio {(int)response.StatusCode}.");
             return string.Empty;
         }
 
-        var json = await response.Content.ReadFromJsonAsync<ChatResponse>();
+        var json = await response.Content.ReadFromJsonAsync<ChatResponse>(cancellationToken: ct);
         return json?.Choices?.FirstOrDefault()?.Message?.Content ?? string.Empty;
     }
 

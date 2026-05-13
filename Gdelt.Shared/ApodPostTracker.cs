@@ -7,12 +7,13 @@ internal static class ApodPostTracker
         "GdeltAutoPost", "posted_apod.txt");
 
     private static readonly HashSet<string> _posted = PostTrackerStore.Load(_filePath);
+    private static readonly object _lock = new();
 
-    public static bool HasBeenPosted(string date) => _posted.Contains(date);
+    public static bool HasBeenPosted(string date) { lock (_lock) return _posted.Contains(date); }
 
     public static void MarkPosted(string date)
     {
-        _posted.Add(date);
+        lock (_lock) _posted.Add(date);
         PostTrackerStore.Append(_filePath, date);
     }
 }

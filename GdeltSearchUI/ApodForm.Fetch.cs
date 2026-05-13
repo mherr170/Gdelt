@@ -60,7 +60,8 @@ internal partial class ApodForm
         {
             using var http  = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(20) };
             var bytes = await http.GetByteArrayAsync(url);
-            using var ms    = new MemoryStream(bytes);
+            // MemoryStream must outlive the Image — Image.FromStream holds a reference to it.
+            var ms    = new MemoryStream(bytes);
             var image = System.Drawing.Image.FromStream(ms);
 
             var old = _pictureBox.Image;

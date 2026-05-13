@@ -8,6 +8,7 @@ internal static class GunViolencePostTracker
 
     private static readonly HashSet<string> _posted;
     private static readonly List<HashSet<string>> _postedWordSets;
+    private static readonly object _lock = new();
 
     private static readonly HashSet<string> _stopWords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -32,7 +33,7 @@ internal static class GunViolencePostTracker
         }
     }
 
-    public static bool HasBeenPosted(string url) => _posted.Contains(url);
+    public static bool HasBeenPosted(string url) { lock (_lock) return _posted.Contains(url); }
 
     public static DateTime? GetLastPostedAt()
     {
@@ -44,24 +45,30 @@ internal static class GunViolencePostTracker
     // catching same-incident articles from different news sources across polling runs.
     public static bool HasSimilarIncidentBeenPosted(string title, double threshold = 0.30)
     {
-        if (_postedWordSets.Count == 0) return false;
-        var candidate = WordSet(title);
-        if (candidate.Count == 0) return false;
-
-        foreach (var stored in _postedWordSets)
+        lock (_lock)
         {
-            var intersection = candidate.Count(w => stored.Contains(w));
-            var union        = candidate.Count + stored.Count - intersection;
-            if (union > 0 && (double)intersection / union >= threshold)
-                return true;
+            if (_postedWordSets.Count == 0) return false;
+            var candidate = WordSet(title);
+            if (candidate.Count == 0) return false;
+
+            foreach (var stored in _postedWordSets)
+            {
+                var intersection = candidate.Count(w => stored.Contains(w));
+                var union        = candidate.Count + stored.Count - intersection;
+                if (union > 0 && (double)intersection / union >= threshold)
+                    return true;
+            }
+            return false;
         }
-        return false;
     }
 
     public static void MarkPosted(string url, string title)
     {
-        _posted.Add(url);
-        _postedWordSets.Add(WordSet(title));
+        lock (_lock)
+        {
+            _posted.Add(url);
+            _postedWordSets.Add(WordSet(title));
+        }
         PostTrackerStore.Append(_filePath, $"{url}\t{title}");
     }
 
