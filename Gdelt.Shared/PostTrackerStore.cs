@@ -23,9 +23,11 @@ internal static class PostTrackerStore
         // Named mutex keyed on the file so UI and service cannot race each other.
         var mutexName = MutexPrefix + Path.GetFileNameWithoutExtension(filePath);
         using var mutex = new Mutex(false, mutexName);
+        bool acquired = false;
         try
         {
-            if (!mutex.WaitOne(TimeSpan.FromSeconds(5)))
+            acquired = mutex.WaitOne(TimeSpan.FromSeconds(5));
+            if (!acquired)
             {
                 AppLogger.Log($"PostTrackerStore mutex timeout ({Path.GetFileName(filePath)}) — skipping write");
                 return;
@@ -46,7 +48,7 @@ internal static class PostTrackerStore
         }
         finally
         {
-            try { mutex.ReleaseMutex(); } catch { }
+            if (acquired) try { mutex.ReleaseMutex(); } catch { }
         }
     }
 }

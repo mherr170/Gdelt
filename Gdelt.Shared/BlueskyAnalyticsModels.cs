@@ -67,7 +67,9 @@ internal sealed class BskyFeedItem
     [JsonPropertyName("reason")] public JsonElement? Reason { get; init; }
     [JsonPropertyName("reply")]  public JsonElement? Reply  { get; init; }
 
-    public bool IsRepost => Reason.HasValue;
+    public bool IsRepost => Reason.HasValue &&
+        Reason.Value.TryGetProperty("$type", out var t) &&
+        t.GetString() == "app.bsky.feed.defs#reasonRepost";
     public bool IsReply  => Reply.HasValue;
 }
 

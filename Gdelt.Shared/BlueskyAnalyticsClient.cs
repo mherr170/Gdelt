@@ -7,7 +7,7 @@ internal sealed class BlueskyAnalyticsClient : IDisposable
 {
     private const string Base = "https://bsky.social/xrpc";
 
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
+    private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
     private string? _accessJwt;
 
     public async Task AuthenticateAsync(string handle, string password, CancellationToken ct = default)
@@ -114,5 +114,5 @@ internal sealed class BlueskyAnalyticsClient : IDisposable
         return resp.Actors;
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose() { } // _http is static/shared — not disposed per-instance
 }
