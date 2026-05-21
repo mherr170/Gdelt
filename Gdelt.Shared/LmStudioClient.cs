@@ -5,7 +5,7 @@ namespace GdeltSearchUI;
 
 internal static class LmStudioClient
 {
-    private const string Endpoint = "http://localhost:1234/v1/chat/completions";
+    private const string Endpoint = "http://10.0.0.119:1234/v1/chat/completions";
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(45) };
 
@@ -15,7 +15,7 @@ internal static class LmStudioClient
     {
         var payload = new
         {
-            model = "llama-3.2-3b-instruct",
+            model = "google/gemma-4-e4b",
             messages = new[]
             {
                 new { role = "system", content = systemPrompt },
