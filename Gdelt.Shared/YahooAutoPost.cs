@@ -45,8 +45,11 @@ internal static class YahooAutoPost
         var savedHistory   = YahooPriceCache.Load();
         var lastPostPrices = savedHistory.LastOrDefault()?.Prices;
 
-        // Save snapshot before posting — data preserved even if caption/post fails
-        var snapshot = YahooPriceCache.Append(prices);
+        var snapshot = new CommodityHistoryPoint
+        {
+            Timestamp = DateTimeOffset.Now,
+            Prices    = prices.ToDictionary(e => e.Code, e => e.Price),
+        };
         var previewHistory = savedHistory.Append(snapshot).ToList();
 
         string headline; string[] tags;
@@ -81,6 +84,7 @@ internal static class YahooAutoPost
 
         if (result.Ok)
         {
+            YahooPriceCache.Append(snapshot);
             YahooPostTracker.MarkPosted(DateTime.Today.ToString("yyyy-MM-dd"));
             var summary = string.Join(" | ", prices.Select(e =>
                 $"{e.DisplayName}: {FmtPrice(e)}"));

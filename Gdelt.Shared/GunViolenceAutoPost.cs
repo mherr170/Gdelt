@@ -40,6 +40,18 @@ internal static class GunViolenceAutoPost
                     result = await client.SearchAsync(Query, LookbackH, "ArtList", ct, retryOn429: false);
                 }
                 catch (OperationCanceledException) { throw; }
+                catch (HttpRequestException ex)
+                {
+                    if (attempt < maxAttempts)
+                    {
+                        var wait = RetryDelays[attempt - 1];
+                        PostLogger.Warn(W, $"Network error (attempt {attempt}/{maxAttempts}), retrying in {wait.TotalSeconds:0}s… ({ex.Message})");
+                        await Task.Delay(wait, ct);
+                        continue;
+                    }
+                    PostLogger.Error(W, $"Fetch failed: {ex.Message}");
+                    return new(GunViolenceAutoPostOutcome.Failed, ErrorMessage: ex.Message);
+                }
                 catch (Exception ex)
                 {
                     PostLogger.Error(W, $"Fetch failed: {ex.Message}");

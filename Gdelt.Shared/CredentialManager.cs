@@ -126,4 +126,27 @@ internal static class CredentialManager
 
     public static (string Handle, string Password)? LoadWeatherBluesky() =>
         SecretStore.Load("WeatherBluesky") is { } t ? (t.Username, t.Password) : null;
+
+    // ── All bot accounts (for growth worker) ─────────────────────────────────
+    public static IReadOnlyList<(string Label, string Slug, string Handle, string Password)> LoadAllBlueskyAccounts()
+    {
+        var list = new List<(string, string, string, string)>();
+        TryAdd(list, "Gas Prices",   "gasprices",   LoadGasPriceBluesky());
+        TryAdd(list, "Quake",        "quake",        LoadQuakeBluesky());
+        TryAdd(list, "Debt",         "debt",         LoadDebtBluesky());
+        TryAdd(list, "Commodity",    "commodity",    LoadCommodityBluesky());
+        TryAdd(list, "Yahoo",        "yahoo",        LoadYahooBluesky());
+        TryAdd(list, "Gun Violence", "gunviolence",  LoadGunViolenceBluesky());
+        TryAdd(list, "Congress",     "congress",     LoadCongressBluesky());
+        TryAdd(list, "APOD",         "apod",         LoadApodBluesky());
+        TryAdd(list, "Stock",        "stock",        LoadStockBluesky());
+        TryAdd(list, "Weather",      "weather",      LoadWeatherBluesky());
+        return list;
+
+        static void TryAdd(List<(string, string, string, string)> l, string label, string slug,
+            (string Handle, string Password)? creds)
+        {
+            if (creds is { } c) l.Add((label, slug, c.Handle, c.Password));
+        }
+    }
 }

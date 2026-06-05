@@ -14,6 +14,7 @@ internal partial class ApodForm : DataForm
 
     private readonly BlueskyPoster _poster = new();
     private ApodEntry? _current;
+    private MemoryStream? _imageStream;
 
     public ApodForm()
     {
@@ -51,7 +52,7 @@ internal partial class ApodForm : DataForm
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _poster.Dispose(); _pictureBox.Image?.Dispose(); }
+        if (disposing) { _poster.Dispose(); _pictureBox.Image?.Dispose(); _imageStream?.Dispose(); }
         base.Dispose(disposing);
     }
 }

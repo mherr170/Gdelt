@@ -11,6 +11,7 @@ internal partial class StockForm : DataForm
     private readonly BlueskyPoster _poster = new();
     private IReadOnlyList<StockEntry> _lastEntries = [];
     private string? _tradingDate;
+    private MemoryStream? _chartStream;
 
     public StockForm()
     {
@@ -48,7 +49,7 @@ internal partial class StockForm : DataForm
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { _poster.Dispose(); _chartBox.Image?.Dispose(); }
+        if (disposing) { _poster.Dispose(); _chartBox.Image?.Dispose(); _chartStream?.Dispose(); }
         base.Dispose(disposing);
     }
 }

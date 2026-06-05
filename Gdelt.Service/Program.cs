@@ -1,6 +1,16 @@
 using Gdelt.Service.Workers;
+using GdeltSearchUI;
 
-var runOnce = args.Contains("--run-once");
+var runOnce        = args.Contains("--run-once");
+var createPackMode = args.Contains("--create-starter-pack");
+
+// One-shot mode: create the Bluesky starter pack then exit.
+if (createPackMode)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+    await BlueskyStarterPackCreator.CreateAsync(cts.Token);
+    return;
+}
 
 var builder = Host.CreateApplicationBuilder(args);
 
@@ -16,6 +26,7 @@ builder.Services.AddHostedService<CongressAutoPostWorker>();
 builder.Services.AddHostedService<ApodAutoPostWorker>();
 builder.Services.AddHostedService<StockAutoPostWorker>();
 builder.Services.AddHostedService<WeatherAutoPostWorker>();
+builder.Services.AddHostedService<BlueskyGrowthWorker>();
 
 var host = builder.Build();
 

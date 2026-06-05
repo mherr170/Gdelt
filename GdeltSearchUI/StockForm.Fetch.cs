@@ -55,11 +55,14 @@ internal partial class StockForm
                 var png = await Task.Run(() => StockChartGenerator.RenderPng(entries));
                 if (png.Length > 0)
                 {
-                    var ms  = new MemoryStream(png);
-                    var img = System.Drawing.Image.FromStream(ms);
-                    var old = _chartBox.Image;
+                    var ms        = new MemoryStream(png);
+                    var img       = System.Drawing.Image.FromStream(ms);
+                    var old       = _chartBox.Image;
+                    var oldStream = _chartStream;
                     _chartBox.Image = img;
+                    _chartStream    = ms;
                     old?.Dispose();
+                    oldStream?.Dispose();
                 }
             }
             catch { /* chart is a nice-to-have */ }

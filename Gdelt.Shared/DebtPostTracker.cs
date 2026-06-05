@@ -18,10 +18,7 @@ internal static class DebtPostTracker
     public static bool IsTodayPosted()
     {
         lock (_lock)
-        {
-            var cutoff = DateTime.Today.AddDays(-7);
-            return _posted.Any(p => DateTime.TryParse(p, out var d) && d >= cutoff);
-        }
+            return _posted.Contains(DateTime.Today.ToString("yyyy-MM-dd"));
     }
 
     public static DateTime? GetLastPostedAt()

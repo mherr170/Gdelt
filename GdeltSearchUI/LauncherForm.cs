@@ -22,6 +22,8 @@ internal sealed class LauncherForm : Form
     private Label _gunViolenceStat   = null!;
     private Label _blueskyMetricsStat = null!;
 
+    private readonly System.Windows.Forms.Timer _refreshTimer;
+
     public LauncherForm()
     {
         Text            = "GDELT Dashboard";
@@ -38,10 +40,9 @@ internal sealed class LauncherForm : Form
 
         RefreshAllStatus();
 
-
-        var refreshTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
-        refreshTimer.Tick += (_, _) => RefreshAllStatus();
-        refreshTimer.Start();
+        _refreshTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
+        _refreshTimer.Tick += (_, _) => RefreshAllStatus();
+        _refreshTimer.Start();
     }
 
     private void RefreshAllStatus()
@@ -153,6 +154,13 @@ internal sealed class LauncherForm : Form
                                : !hasKey ? "⚠ No ProPublica API key"
                                :           "⚠ No Bluesky account configured";
         _congressStat.ForeColor = ready ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        _refreshTimer.Stop();
+        _refreshTimer.Dispose();
+        base.OnFormClosed(e);
     }
 
     // ── Layout ───────────────────────────────────────────────────────────────────

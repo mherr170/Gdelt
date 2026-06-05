@@ -49,7 +49,7 @@ internal sealed class BskyPost
         {
             // AT URI: at://did:plc:.../app.bsky.feed.post/{rkey}
             var parts = Uri.Split('/');
-            var rkey  = parts.Length > 0 ? parts[^1] : "";
+            var rkey  = parts.Length >= 5 ? parts[^1] : "";
             return $"https://bsky.app/profile/{Author.Handle}/post/{rkey}";
         }
     }

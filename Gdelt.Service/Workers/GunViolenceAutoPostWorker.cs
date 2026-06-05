@@ -5,7 +5,7 @@ namespace Gdelt.Service.Workers;
 internal sealed class GunViolenceAutoPostWorker : PeriodicAutoPostWorker
 {
     public GunViolenceAutoPostWorker(ILogger<GunViolenceAutoPostWorker> logger, IConfiguration config)
-        : base(logger, "gunviolence", TimeSpan.FromHours(config.GetValue<double>("AutoPost:GunViolence:CheckEveryHours", 3.0))) { }
+        : base(logger, "gunviolence", TimeSpan.FromHours(config.GetValue<double>("AutoPost:GunViolence:CheckEveryHours", 4.0))) { }
 
     protected override async Task TickAsync(CancellationToken ct)
     {

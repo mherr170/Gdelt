@@ -657,6 +657,6 @@ internal static class LmStudioPostGenerator
         segment.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(t => _nonAlpha.Replace(t.TrimStart('#'), ""))
             .Where(t => t.Length >= 2 && char.IsLetter(t[0]))
-            .Take(3)
+            .Take(4)
             .ToArray();
 }

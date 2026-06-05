@@ -18,7 +18,17 @@ internal sealed class GasAutoPostWorker : PeriodicAutoPostWorker
     protected override bool ShouldTickNow()
     {
         var last = GasPricePostTracker.GetLastPostedAt();
-        return last is null || DateTime.Now - last.Value >= _gateInterval;
+        if (last is null) return true;
+
+        var elapsed = DateTime.Now - last.Value;
+
+        // EIA publishes new weekly data every Monday morning (~9-10am ET).
+        // Once 5+ days have passed since the last post, poll hourly on Mondays
+        // so we catch the new release within an hour of publication.
+        if (DateTime.Now.DayOfWeek == DayOfWeek.Monday && elapsed.TotalDays >= 5)
+            return elapsed.TotalHours >= 1;
+
+        return elapsed >= _gateInterval;
     }
 
     protected override async Task TickAsync(CancellationToken ct)
