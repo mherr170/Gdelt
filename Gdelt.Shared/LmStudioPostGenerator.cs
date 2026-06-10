@@ -615,26 +615,31 @@ internal static class LmStudioPostGenerator
         }
     }
 
+    private static readonly Regex _thinkBlock = new(@"(<think>[\s\S]*?</think>|<\|channel>thought[\s\S]*?<channel\|>)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex _labelPrefix = new(@"^\*{0,2}(HEADLINE|BODY|TAGS)\*{0,2}:\*{0,2}", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static (string Headline, string Body, string[] Tags) Parse(string text, string rawTitle)
     {
+        // Strip Gemma-style thinking blocks before parsing
+        text = _thinkBlock.Replace(text, "").Trim();
+
         string headline = rawTitle;
         string body = "";
         string[] tags = [];
 
         foreach (var line in text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            if (line.StartsWith("HEADLINE:", StringComparison.OrdinalIgnoreCase))
+            var m = _labelPrefix.Match(line);
+            if (!m.Success) continue;
+
+            var label   = m.Groups[1].Value.ToUpperInvariant();
+            var content = line[m.Length..].Trim();
+
+            switch (label)
             {
-                var h = line["HEADLINE:".Length..].Trim();
-                if (h.Length >= 5) headline = h;
-            }
-            else if (line.StartsWith("BODY:", StringComparison.OrdinalIgnoreCase))
-            {
-                body = line["BODY:".Length..].Trim();
-            }
-            else if (line.StartsWith("TAGS:", StringComparison.OrdinalIgnoreCase))
-            {
-                tags = ParseTags(line["TAGS:".Length..]);
+                case "HEADLINE" when content.Length >= 5: headline = content; break;
+                case "BODY"     when content.Length > 0:  body     = content; break;
+                case "TAGS":                              tags     = ParseTags(content); break;
             }
         }
 
