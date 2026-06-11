@@ -80,33 +80,15 @@ internal sealed class BlueskyPoster : IDisposable
             ?? throw new InvalidOperationException("Empty blob response.");
 
         // 2. Create record with image embed.
-        var embed = new
+        var record = new PostRecordWithImage
         {
-            type   = "app.bsky.embed.images",
-            images = new[]
+            Text      = text,
+            CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+            Langs     = ["en"],
+            Facets    = BuildHashtagFacets(text),
+            Embed     = new ImageEmbed
             {
-                new { alt = altText, image = blobJson.Blob },
-            },
-        };
-
-        var record = new Dictionary<string, object?>
-        {
-            ["$type"]     = "app.bsky.feed.post",
-            ["text"]      = text,
-            ["createdAt"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-            ["langs"]     = new[] { "en" },
-            ["facets"]    = BuildHashtagFacets(text),
-            ["embed"]     = new Dictionary<string, object?>
-            {
-                ["$type"]  = "app.bsky.embed.images",
-                ["images"] = new[]
-                {
-                    new Dictionary<string, object?>
-                    {
-                        ["alt"]   = altText,
-                        ["image"] = blobJson.Blob,
-                    },
-                },
+                Images = [new ImageItem { Alt = altText, Image = blobJson.Blob }],
             },
         };
 
@@ -298,6 +280,28 @@ internal sealed class BlueskyPoster : IDisposable
     {
         [JsonPropertyName("$type")] public string Type { get; init; } = "app.bsky.richtext.facet#tag";
         [JsonPropertyName("tag")]   public string Tag  { get; init; } = "";
+    }
+
+    private sealed class PostRecordWithImage
+    {
+        [JsonPropertyName("$type")]     public string       Type      { get; init; } = "app.bsky.feed.post";
+        [JsonPropertyName("text")]      public string       Text      { get; init; } = "";
+        [JsonPropertyName("createdAt")] public string       CreatedAt { get; init; } = "";
+        [JsonPropertyName("langs")]     public string[]     Langs     { get; init; } = [];
+        [JsonPropertyName("facets")]    public List<Facet>  Facets    { get; init; } = [];
+        [JsonPropertyName("embed")]     public ImageEmbed   Embed     { get; init; } = null!;
+    }
+
+    private sealed class ImageEmbed
+    {
+        [JsonPropertyName("$type")]  public string      Type   { get; init; } = "app.bsky.embed.images";
+        [JsonPropertyName("images")] public ImageItem[] Images { get; init; } = [];
+    }
+
+    private sealed class ImageItem
+    {
+        [JsonPropertyName("alt")]   public string                        Alt   { get; init; } = "";
+        [JsonPropertyName("image")] public System.Text.Json.JsonElement  Image { get; init; }
     }
 
     private sealed class UploadBlobResponse
