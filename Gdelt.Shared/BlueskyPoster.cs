@@ -95,7 +95,7 @@ internal sealed class BlueskyPoster : IDisposable
             ["text"]      = text,
             ["createdAt"] = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
             ["langs"]     = new[] { "en" },
-            ["facets"]    = new List<Facet>(),
+            ["facets"]    = BuildHashtagFacets(text),
             ["embed"]     = new Dictionary<string, object?>
             {
                 ["$type"]  = "app.bsky.embed.images",
@@ -153,7 +153,7 @@ internal sealed class BlueskyPoster : IDisposable
                     Text = text,
                     CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
                     Langs = ["en"],
-                    Facets = new List<Facet>(),
+                    Facets = BuildHashtagFacets(text),
                 },
             }),
         };
@@ -186,6 +186,33 @@ internal sealed class BlueskyPoster : IDisposable
         var session = await resp.Content.ReadFromJsonAsync<SessionResponse>(cancellationToken: ct)
             ?? throw new InvalidOperationException("Empty session response.");
         return (session, null);
+    }
+
+    private static List<Facet> BuildHashtagFacets(string text)
+    {
+        var facets = new List<Facet>();
+        var textBytes = Encoding.UTF8.GetBytes(text);
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] != '#') { i++; continue; }
+            // Must be at start or preceded by whitespace
+            if (i > 0 && !char.IsWhiteSpace(text[i - 1])) { i++; continue; }
+            var start = i + 1;
+            var end = start;
+            while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_')) end++;
+            if (end == start) { i++; continue; } // bare #
+            var tag = text[start..end];
+            var byteStart = Encoding.UTF8.GetByteCount(text[..i]);
+            var byteEnd   = byteStart + Encoding.UTF8.GetByteCount(text[i..end]);
+            facets.Add(new Facet
+            {
+                Index    = new FacetIndex { ByteStart = byteStart, ByteEnd = byteEnd },
+                Features = [new TagFeature { Tag = tag }],
+            });
+            i = end;
+        }
+        return facets;
     }
 
     private static async Task<(string Text, List<Facet> Facets)> BuildPostAsync(string title, string url)
