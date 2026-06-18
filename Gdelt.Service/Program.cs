@@ -3,12 +3,24 @@ using GdeltSearchUI;
 
 var runOnce        = args.Contains("--run-once");
 var createPackMode = args.Contains("--create-starter-pack");
+var postBirdNow    = args.Contains("--post-bird-now");
 
 // One-shot mode: create the Bluesky starter pack then exit.
 if (createPackMode)
 {
     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
     await BlueskyStarterPackCreator.CreateAsync(cts.Token);
+    return;
+}
+
+// One-shot mode: post the NJ Birds top videos now, then exit. Uses today's
+// 08:00 slot key so a subsequent service restart won't repost that slot.
+if (postBirdNow)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    var slot   = BirdAutoPost.SlotKey(DateTime.Now, new TimeOnly(8, 0));
+    var result = await BirdAutoPost.PostIfNeededAsync(slot, cts.Token);
+    Console.WriteLine($"Bird one-shot result: {result.Outcome} (posted {result.PostedCount}){(result.ErrorMessage is null ? "" : $" — {result.ErrorMessage}")}");
     return;
 }
 
@@ -27,6 +39,7 @@ builder.Services.AddHostedService<ApodAutoPostWorker>();
 builder.Services.AddHostedService<StockAutoPostWorker>();
 builder.Services.AddHostedService<WeatherAutoPostWorker>();
 builder.Services.AddHostedService<BlueskyGrowthWorker>();
+builder.Services.AddHostedService<BirdAutoPostWorker>();
 
 var host = builder.Build();
 

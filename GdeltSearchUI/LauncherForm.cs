@@ -10,6 +10,7 @@ internal sealed class LauncherForm : Form
     private Button _stockBtn         = null!;
     private Button _weatherBtn       = null!;
     private Button _blueskyMetricsBtn = null!;
+    private Button _streamingBtn      = null!;
 
     private Label _debtStat          = null!;
     private Label _gasStat           = null!;
@@ -21,13 +22,15 @@ internal sealed class LauncherForm : Form
     private Label _quakeStat         = null!;
     private Label _gunViolenceStat   = null!;
     private Label _blueskyMetricsStat = null!;
+    private Label _streamingStat      = null!;
+    private Label _birdStat           = null!;
 
     private readonly System.Windows.Forms.Timer _refreshTimer;
 
     public LauncherForm()
     {
         Text            = "GDELT Dashboard";
-        Size            = new Size(540, 462);
+        Size            = new Size(540, 538);
         MinimumSize     = new Size(400, 220);
         StartPosition   = FormStartPosition.CenterScreen;
         Font            = new Font("Segoe UI", 9.5f);
@@ -57,6 +60,8 @@ internal sealed class LauncherForm : Form
         RefreshQuakeStatus();
         RefreshGunViolenceStatus();
         RefreshBlueskyMetricsStatus();
+        RefreshStreamingStatus();
+        RefreshBirdStatus();
     }
 
     private void RefreshBlueskyMetricsStatus()
@@ -64,6 +69,32 @@ internal sealed class LauncherForm : Form
         var hasCred = CredentialManager.Load() is not null;
         _blueskyMetricsStat.Text      = hasCred ? "✓ Account configured" : "⚠ No default account set";
         _blueskyMetricsStat.ForeColor = hasCred
+            ? Color.FromArgb(0x4F, 0xB5, 0x6E)
+            : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshStreamingStatus()
+    {
+        var hasCred = CredentialManager.LoadStreamingBluesky() is not null;
+        _streamingStat.Text      = hasCred ? "✓ Account configured — growth only" : "⚠ No Bluesky account configured";
+        _streamingStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshBirdStatus()
+    {
+        var hasCred = CredentialManager.LoadBirdBluesky() is not null;
+        var hasKey  = !string.IsNullOrWhiteSpace(CredentialManager.LoadYouTubeApiKey());
+        var ready   = hasCred && hasKey;
+        var last    = BirdPostTracker.GetLastPostedAt();
+        var recent  = last.HasValue && (DateTime.Now - last.Value).TotalHours < 12;
+
+        _birdStat.Text = ready
+            ? (last.HasValue
+                ? (recent ? $"✓ Last post: {last.Value:HH:mm}" : $"⚠ Last post: {last.Value:MMM d HH:mm}")
+                : "✓ Ready — no posts yet")
+            : (!hasCred ? "⚠ No Bluesky account configured"
+                        : "⚠ No YouTube API key configured");
+        _birdStat.ForeColor = (ready && (!last.HasValue || recent))
             ? Color.FromArgb(0x4F, 0xB5, 0x6E)
             : Color.FromArgb(0xB8, 0x76, 0x0B);
     }
@@ -185,14 +216,14 @@ internal sealed class LauncherForm : Form
         {
             Dock        = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount    = 10,
+            RowCount    = 12,
             Padding     = new Padding(12, 8, 12, 12),
             BackColor   = DarkTheme.Background,
         };
 
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 10; i++)
+        for (int i = 0; i < 12; i++)
             table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         table.Controls.Add(MakeGunViolenceButton(), 0, 0);
@@ -234,6 +265,14 @@ internal sealed class LauncherForm : Form
         table.Controls.Add(MakeBlueskyMetricsButton(), 0, 9);
         _blueskyMetricsStat = MakeStatLabel("");
         table.Controls.Add(_blueskyMetricsStat, 1, 9);
+
+        table.Controls.Add(MakeStreamingButton(), 0, 10);
+        _streamingStat = MakeStatLabel("");
+        table.Controls.Add(_streamingStat, 1, 10);
+
+        table.Controls.Add(MakeBirdButton(), 0, 11);
+        _birdStat = MakeStatLabel("");
+        table.Controls.Add(_birdStat, 1, 11);
 
         return table;
     }
@@ -376,6 +415,35 @@ internal sealed class LauncherForm : Form
             form.Show();
         };
         return _blueskyMetricsBtn;
+    }
+
+    private Button MakeStreamingButton()
+    {
+        _streamingBtn = MakeButton("Streaming", Color.FromArgb(0x55, 0x2B, 0x8A));
+        _streamingBtn.Click += (_, _) =>
+        {
+            using var dlg = new SettingsDialog(
+                CredentialManager.LoadStreamingBluesky,
+                CredentialManager.SaveStreamingBluesky,
+                "Bluesky Account — Streaming");
+            if (dlg.ShowDialog() == DialogResult.OK)
+                RefreshStreamingStatus();
+        };
+        return _streamingBtn;
+    }
+
+    private Button _birdBtn = null!;
+
+    private Button MakeBirdButton()
+    {
+        _birdBtn = MakeButton("NJ Birds", Color.FromArgb(0x2E, 0x6B, 0x3E));
+        _birdBtn.Click += (_, _) =>
+        {
+            using var dlg = new BirdSettingsDialog();
+            if (dlg.ShowDialog() == DialogResult.OK)
+                RefreshBirdStatus();
+        };
+        return _birdBtn;
     }
 
     private static Button MakeButton(string label, Color backColor)

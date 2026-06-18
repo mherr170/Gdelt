@@ -130,7 +130,7 @@ internal sealed class BlueskyPoster : IDisposable
             {
                 repo = session.Did,
                 collection = "app.bsky.feed.post",
-                record = new PostRecord
+                record = new HashtagPostRecord
                 {
                     Text = text,
                     CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
@@ -170,10 +170,9 @@ internal sealed class BlueskyPoster : IDisposable
         return (session, null);
     }
 
-    private static List<Facet> BuildHashtagFacets(string text)
+    private static List<TagFacet> BuildHashtagFacets(string text)
     {
-        var facets = new List<Facet>();
-        var textBytes = Encoding.UTF8.GetBytes(text);
+        var facets = new List<TagFacet>();
         var i = 0;
         while (i < text.Length)
         {
@@ -187,7 +186,7 @@ internal sealed class BlueskyPoster : IDisposable
             var tag = text[start..end];
             var byteStart = Encoding.UTF8.GetByteCount(text[..i]);
             var byteEnd   = byteStart + Encoding.UTF8.GetByteCount(text[i..end]);
-            facets.Add(new Facet
+            facets.Add(new TagFacet
             {
                 Index    = new FacetIndex { ByteStart = byteStart, ByteEnd = byteEnd },
                 Features = [new TagFeature { Tag = tag }],
@@ -249,13 +248,33 @@ internal sealed class BlueskyPoster : IDisposable
         [JsonPropertyName("accessJwt")] public string AccessJwt { get; init; } = "";
     }
 
+    // Used by PostAsync (URL/article posts) — features stay as List<object> since BuildPostAsync
+    // mixes LinkFeature and TagFeature and these posts are already working.
     private sealed class PostRecord
     {
-        [JsonPropertyName("$type")]     public string       Type      { get; init; } = "app.bsky.feed.post";
-        [JsonPropertyName("text")]      public string       Text      { get; init; } = "";
-        [JsonPropertyName("createdAt")] public string       CreatedAt { get; init; } = "";
-        [JsonPropertyName("langs")]     public string[]     Langs     { get; init; } = [];
-        [JsonPropertyName("facets")]    public List<Facet>  Facets    { get; init; } = [];
+        [JsonPropertyName("$type")]     public string      Type      { get; init; } = "app.bsky.feed.post";
+        [JsonPropertyName("text")]      public string      Text      { get; init; } = "";
+        [JsonPropertyName("createdAt")] public string      CreatedAt { get; init; } = "";
+        [JsonPropertyName("langs")]     public string[]    Langs     { get; init; } = [];
+        [JsonPropertyName("facets")]    public List<Facet> Facets    { get; init; } = [];
+    }
+
+    // Used by PostTextAsync (text-only hashtag posts) — fully typed so STJ always
+    // emits the correct feature properties without relying on runtime type resolution.
+    private sealed class HashtagPostRecord
+    {
+        [JsonPropertyName("$type")]     public string          Type      { get; init; } = "app.bsky.feed.post";
+        [JsonPropertyName("text")]      public string          Text      { get; init; } = "";
+        [JsonPropertyName("createdAt")] public string          CreatedAt { get; init; } = "";
+        [JsonPropertyName("langs")]     public string[]        Langs     { get; init; } = [];
+        [JsonPropertyName("facets")]    public List<TagFacet>  Facets    { get; init; } = [];
+    }
+
+    // Typed facet for hashtag features — avoids List<object> polymorphism issues with STJ.
+    private sealed class TagFacet
+    {
+        [JsonPropertyName("index")]    public FacetIndex   Index    { get; init; } = new();
+        [JsonPropertyName("features")] public TagFeature[] Features { get; init; } = [];
     }
 
     private sealed class Facet
@@ -284,12 +303,12 @@ internal sealed class BlueskyPoster : IDisposable
 
     private sealed class PostRecordWithImage
     {
-        [JsonPropertyName("$type")]     public string       Type      { get; init; } = "app.bsky.feed.post";
-        [JsonPropertyName("text")]      public string       Text      { get; init; } = "";
-        [JsonPropertyName("createdAt")] public string       CreatedAt { get; init; } = "";
-        [JsonPropertyName("langs")]     public string[]     Langs     { get; init; } = [];
-        [JsonPropertyName("facets")]    public List<Facet>  Facets    { get; init; } = [];
-        [JsonPropertyName("embed")]     public ImageEmbed   Embed     { get; init; } = null!;
+        [JsonPropertyName("$type")]     public string          Type      { get; init; } = "app.bsky.feed.post";
+        [JsonPropertyName("text")]      public string          Text      { get; init; } = "";
+        [JsonPropertyName("createdAt")] public string          CreatedAt { get; init; } = "";
+        [JsonPropertyName("langs")]     public string[]        Langs     { get; init; } = [];
+        [JsonPropertyName("facets")]    public List<TagFacet>  Facets    { get; init; } = [];
+        [JsonPropertyName("embed")]     public ImageEmbed      Embed     { get; init; } = null!;
     }
 
     private sealed class ImageEmbed

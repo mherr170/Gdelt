@@ -127,6 +127,30 @@ internal static class CredentialManager
     public static (string Handle, string Password)? LoadWeatherBluesky() =>
         SecretStore.Load("WeatherBluesky") is { } t ? (t.Username, t.Password) : null;
 
+    // ── Streaming Bluesky ─────────────────────────────────────────────────────
+
+    public static void SaveStreamingBluesky(string handle, string password) =>
+        SecretStore.Save("StreamingBluesky", handle, password);
+
+    public static (string Handle, string Password)? LoadStreamingBluesky() =>
+        SecretStore.Load("StreamingBluesky") is { } t ? (t.Username, t.Password) : null;
+
+    // ── Backyard Birds of NJ Bluesky ──────────────────────────────────────────
+
+    public static void SaveBirdBluesky(string handle, string password) =>
+        SecretStore.Save("BirdBluesky", handle, password);
+
+    public static (string Handle, string Password)? LoadBirdBluesky() =>
+        SecretStore.Load("BirdBluesky") is { } t ? (t.Username, t.Password) : null;
+
+    // ── YouTube Data API Key ──────────────────────────────────────────────────
+
+    public static void SaveYouTubeApiKey(string apiKey) =>
+        SecretStore.Save("YouTubeApiKey", "youtube", apiKey);
+
+    public static string? LoadYouTubeApiKey() =>
+        SecretStore.Load("YouTubeApiKey")?.Password;
+
     // ── All bot accounts (for growth worker) ─────────────────────────────────
     public static IReadOnlyList<(string Label, string Slug, string Handle, string Password)> LoadAllBlueskyAccounts()
     {
@@ -141,6 +165,8 @@ internal static class CredentialManager
         TryAdd(list, "APOD",         "apod",         LoadApodBluesky());
         TryAdd(list, "Stock",        "stock",        LoadStockBluesky());
         TryAdd(list, "Weather",      "weather",      LoadWeatherBluesky());
+        TryAdd(list, "Streaming",    "streaming",    LoadStreamingBluesky());
+        TryAdd(list, "NJ Birds",     "njbirds",      LoadBirdBluesky());
         return list;
 
         static void TryAdd(List<(string, string, string, string)> l, string label, string slug,

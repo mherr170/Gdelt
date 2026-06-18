@@ -1,0 +1,147 @@
+namespace GdeltSearchUI;
+
+internal sealed class BirdSettingsDialog : Form
+{
+    private readonly TextBox _handleBox;
+    private readonly TextBox _passwordBox;
+    private readonly TextBox _youtubeKeyBox;
+
+    public BirdSettingsDialog()
+    {
+        Text            = "Backyard Birds of New Jersey — Settings";
+        Size            = new Size(460, 270);
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        StartPosition   = FormStartPosition.CenterParent;
+        MaximizeBox     = false;
+        MinimizeBox     = false;
+        Font            = new Font("Segoe UI", 9.5f);
+        BackColor       = DarkTheme.Background;
+
+        var layout = new TableLayoutPanel
+        {
+            Dock        = DockStyle.Fill,
+            Padding     = new Padding(16, 12, 16, 8),
+            ColumnCount = 2,
+            RowCount    = 5,
+            BackColor   = DarkTheme.Background,
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        layout.Controls.Add(MakeLabel("Bluesky Handle:"), 0, 0);
+        _handleBox = MakeInput("user.bsky.social");
+        layout.Controls.Add(_handleBox, 1, 0);
+
+        layout.Controls.Add(MakeLabel("App Password:"), 0, 1);
+        _passwordBox = MakeInput("xxxx-xxxx-xxxx-xxxx", isPassword: true);
+        layout.Controls.Add(_passwordBox, 1, 1);
+
+        layout.Controls.Add(MakeLabel("YouTube API Key:"), 0, 2);
+        _youtubeKeyBox = MakeInput("AIza…", isPassword: true);
+        layout.Controls.Add(_youtubeKeyBox, 1, 2);
+
+        var hint = new Label
+        {
+            Text      = "Bluesky: bsky.app › Settings › App Passwords  |  YouTube: console.cloud.google.com",
+            Dock      = DockStyle.Fill,
+            ForeColor = DarkTheme.TextMuted,
+            Font      = new Font("Segoe UI", 8.0f),
+            BackColor = Color.Transparent,
+        };
+        layout.Controls.Add(hint, 0, 3);
+        layout.SetColumnSpan(hint, 2);
+
+        var saveBtn   = MakeDialogButton("Save",   DialogResult.OK);
+        var cancelBtn = MakeDialogButton("Cancel", DialogResult.Cancel);
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock          = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            BackColor     = Color.Transparent,
+        };
+        buttons.Controls.Add(cancelBtn);
+        buttons.Controls.Add(saveBtn);
+        layout.Controls.Add(buttons, 0, 4);
+        layout.SetColumnSpan(buttons, 2);
+
+        Controls.Add(layout);
+        AcceptButton = saveBtn;
+        CancelButton = cancelBtn;
+
+        // Pre-fill existing values
+        var bluesky = CredentialManager.LoadBirdBluesky();
+        if (bluesky.HasValue)
+        {
+            _handleBox.Text   = bluesky.Value.Handle;
+            _passwordBox.Text = bluesky.Value.Password;
+        }
+        var ytKey = CredentialManager.LoadYouTubeApiKey();
+        if (ytKey is not null)
+            _youtubeKeyBox.Text = ytKey;
+
+        saveBtn.Click += OnSave;
+    }
+
+    private void OnSave(object? sender, EventArgs e)
+    {
+        var handle    = StripInvisible(_handleBox.Text.Trim());
+        var password  = _passwordBox.Text.Trim();
+        var youtubeKey = _youtubeKeyBox.Text.Trim();
+
+        if (string.IsNullOrEmpty(handle) || string.IsNullOrEmpty(password) || string.IsNullOrEmpty(youtubeKey))
+        {
+            MessageBox.Show("All three fields are required.", "Validation",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            DialogResult = DialogResult.None;
+            return;
+        }
+
+        CredentialManager.SaveBirdBluesky(handle, password);
+        CredentialManager.SaveYouTubeApiKey(youtubeKey);
+    }
+
+    private static string StripInvisible(string s) =>
+        new string(s.Where(c => !char.IsControl(c) && char.GetUnicodeCategory(c)
+            is not System.Globalization.UnicodeCategory.Format
+            and not System.Globalization.UnicodeCategory.OtherNotAssigned).ToArray());
+
+    private static Label MakeLabel(string text) => new()
+    {
+        Text      = text,
+        TextAlign = ContentAlignment.MiddleRight,
+        Dock      = DockStyle.Fill,
+        ForeColor = DarkTheme.TextPrimary,
+        BackColor = Color.Transparent,
+    };
+
+    private static TextBox MakeInput(string placeholder, bool isPassword = false) => new()
+    {
+        Dock                  = DockStyle.Fill,
+        PlaceholderText       = placeholder,
+        UseSystemPasswordChar = isPassword,
+        BackColor             = DarkTheme.Input,
+        ForeColor             = DarkTheme.TextPrimary,
+        BorderStyle           = BorderStyle.FixedSingle,
+    };
+
+    private static Button MakeDialogButton(string text, DialogResult result)
+    {
+        var btn = new Button
+        {
+            Text         = text,
+            DialogResult = result,
+            AutoSize     = true,
+            BackColor    = DarkTheme.Raised,
+            ForeColor    = DarkTheme.TextPrimary,
+            FlatStyle    = FlatStyle.Flat,
+        };
+        btn.FlatAppearance.BorderColor = DarkTheme.Input;
+        return btn;
+    }
+}
