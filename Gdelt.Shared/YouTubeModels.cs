@@ -5,6 +5,10 @@ namespace GdeltSearchUI;
 internal sealed record YouTubeVideo(string VideoId, string Title, long ViewCount)
 {
     public string WatchUrl => $"https://www.youtube.com/watch?v={VideoId}";
+
+    // hqdefault (480x360) is always present for any public video, unlike maxresdefault
+    // which 404s on older/low-res uploads — so it's the safe choice for a link-card thumb.
+    public string ThumbnailUrl => $"https://img.youtube.com/vi/{VideoId}/hqdefault.jpg";
 }
 
 // ── YouTube Data API v3 response shapes ──────────────────────────────────────

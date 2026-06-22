@@ -113,6 +113,81 @@ internal sealed class BlueskyPoster : IDisposable
         return (true, null);
     }
 
+    // Posts pre-built text together with an external link card (app.bsky.embed.external).
+    // Bluesky does not generate link previews server-side, so the thumbnail card must be
+    // built here: the thumb image is uploaded as a blob and attached to the embed.
+    // If the thumb download/upload fails, the card is still posted without an image.
+    public async Task<(bool Ok, string? Error)> PostExternalLinkAsync(
+        string handle, string appPassword, string text,
+        string linkUri, string cardTitle, string cardDescription,
+        byte[]? thumbBytes, CancellationToken ct)
+    {
+        var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
+        if (authError is not null) return (false, authError);
+
+        var si = new System.Globalization.StringInfo(text);
+        if (si.LengthInTextElements > MaxPostChars)
+            text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
+
+        // 1. Upload thumbnail as a blob (best-effort — card still posts without it).
+        System.Text.Json.JsonElement? thumbBlob = null;
+        if (thumbBytes is { Length: > 0 })
+        {
+            using var blobReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.uploadBlob")
+            {
+                Content = new ByteArrayContent(thumbBytes),
+            };
+            blobReq.Content.Headers.ContentType = new MediaTypeHeaderValue("image/jpeg");
+            blobReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+
+            var blobResp = await _http.SendAsync(blobReq, ct);
+            if (blobResp.IsSuccessStatusCode)
+            {
+                var blobJson = await blobResp.Content.ReadFromJsonAsync<UploadBlobResponse>(cancellationToken: ct);
+                if (blobJson is not null) thumbBlob = blobJson.Blob;
+            }
+        }
+
+        // 2. Create record with external embed.
+        var record = new PostRecordWithExternal
+        {
+            Text      = text,
+            CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+            Langs     = ["en"],
+            Facets    = BuildHashtagFacets(text),
+            Embed     = new ExternalEmbed
+            {
+                External = new ExternalInfo
+                {
+                    Uri         = linkUri,
+                    Title       = cardTitle,
+                    Description = cardDescription,
+                    Thumb       = thumbBlob,
+                },
+            },
+        };
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+        {
+            Content = JsonContent.Create(new
+            {
+                repo       = session.Did,
+                collection = "app.bsky.feed.post",
+                record,
+            }),
+        };
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+
+        var postResp = await _http.SendAsync(req, ct);
+        if (!postResp.IsSuccessStatusCode)
+        {
+            var body = await postResp.Content.ReadAsStringAsync(ct);
+            return (false, $"Post failed ({(int)postResp.StatusCode}):\n{body}");
+        }
+
+        return (true, null);
+    }
+
     // Posts pre-built text with no URL or hashtag processing — used for non-article posts.
     public async Task<(bool Ok, string? Error)> PostTextAsync(
         string handle, string appPassword, string text, CancellationToken ct)
@@ -321,6 +396,34 @@ internal sealed class BlueskyPoster : IDisposable
     {
         [JsonPropertyName("alt")]   public string                        Alt   { get; init; } = "";
         [JsonPropertyName("image")] public System.Text.Json.JsonElement  Image { get; init; }
+    }
+
+    private sealed class PostRecordWithExternal
+    {
+        [JsonPropertyName("$type")]     public string         Type      { get; init; } = "app.bsky.feed.post";
+        [JsonPropertyName("text")]      public string         Text      { get; init; } = "";
+        [JsonPropertyName("createdAt")] public string         CreatedAt { get; init; } = "";
+        [JsonPropertyName("langs")]     public string[]       Langs     { get; init; } = [];
+        [JsonPropertyName("facets")]    public List<TagFacet> Facets    { get; init; } = [];
+        [JsonPropertyName("embed")]     public ExternalEmbed  Embed     { get; init; } = null!;
+    }
+
+    private sealed class ExternalEmbed
+    {
+        [JsonPropertyName("$type")]    public string       Type     { get; init; } = "app.bsky.embed.external";
+        [JsonPropertyName("external")] public ExternalInfo External { get; init; } = new();
+    }
+
+    private sealed class ExternalInfo
+    {
+        [JsonPropertyName("uri")]         public string Uri         { get; init; } = "";
+        [JsonPropertyName("title")]       public string Title       { get; init; } = "";
+        [JsonPropertyName("description")] public string Description { get; init; } = "";
+
+        // Optional blob — omitted entirely when the thumbnail upload failed.
+        [JsonPropertyName("thumb")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public System.Text.Json.JsonElement? Thumb { get; init; }
     }
 
     private sealed class UploadBlobResponse

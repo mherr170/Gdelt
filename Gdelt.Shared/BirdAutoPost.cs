@@ -22,6 +22,8 @@ internal static class BirdAutoPost
     private const string ChannelHandle = "backyardbirdsofnewjersey";
     private const int    TopN          = 3;
 
+    private static readonly HttpClient _thumbHttp = new() { Timeout = TimeSpan.FromSeconds(15) };
+
     public static async Task<BirdAutoPostResult> PostIfNeededAsync(
         string slotKey, CancellationToken ct = default)
     {
@@ -82,9 +84,26 @@ internal static class BirdAutoPost
         using var poster = new BlueskyPoster();
         foreach (var video in videos)
         {
-            var (ok, error) = await poster.PostAsync(
+            // Best-effort thumbnail download so the post renders a rich link card
+            // instead of a bare URL. A failure here is non-fatal — the card still posts.
+            byte[]? thumb = null;
+            try
+            {
+                thumb = await _thumbHttp.GetByteArrayAsync(video.ThumbnailUrl, ct);
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex)
+            {
+                PostLogger.Warn(W, $"Thumbnail fetch failed for \"{video.Title}\": {ex.Message}");
+            }
+
+            var (ok, error) = await poster.PostExternalLinkAsync(
                 creds.Value.Handle, creds.Value.Password,
-                video.Title, video.WatchUrl, ct);
+                text:            video.Title,
+                linkUri:         video.WatchUrl,
+                cardTitle:       video.Title,
+                cardDescription: $"{video.ViewCount:N0} views · YouTube",
+                thumbBytes:      thumb, ct);
 
             if (ok)
             {
