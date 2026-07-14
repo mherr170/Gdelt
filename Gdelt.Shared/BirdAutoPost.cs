@@ -82,8 +82,10 @@ internal static class BirdAutoPost
 
         int posted = 0;
         using var poster = new BlueskyPoster();
-        foreach (var video in videos)
+        for (int vi = 0; vi < videos.Count; vi++)
         {
+            var video = videos[vi];
+
             // Best-effort thumbnail download so the post renders a rich link card
             // instead of a bare URL. A failure here is non-fatal — the card still posts.
             byte[]? thumb = null;
@@ -97,9 +99,13 @@ internal static class BirdAutoPost
                 PostLogger.Warn(W, $"Thumbnail fetch failed for \"{video.Title}\": {ex.Message}");
             }
 
+            var tags         = await LmStudioPostGenerator.GenerateBirdPostAsync(video, ct);
+            var hashtagLine  = BlueskyPostHelper.HashtagLine(tags);
+            var postText     = video.Title + hashtagLine;
+
             var (ok, error) = await poster.PostExternalLinkAsync(
                 creds.Value.Handle, creds.Value.Password,
-                text:            video.Title,
+                text:            postText,
                 linkUri:         video.WatchUrl,
                 cardTitle:       video.Title,
                 cardDescription: $"{video.ViewCount:N0} views · YouTube",
@@ -116,7 +122,7 @@ internal static class BirdAutoPost
             }
 
             // Brief pause between posts to avoid rate limiting
-            if (posted < videos.Count)
+            if (vi < videos.Count - 1)
                 await Task.Delay(TimeSpan.FromSeconds(3), ct);
         }
 

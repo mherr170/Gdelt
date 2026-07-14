@@ -84,10 +84,13 @@ internal static class WeatherAutoPost
 
     internal static string BuildPostText(WeatherAlert a, string headline, string[] tags)
     {
-        var emoji       = AlertEmoji(a.Event);
-        var expiresStr  = a.Expires.HasValue ? a.Expires.Value.ToString("h:mm tt") : "—";
-        var area        = TrimTo(a.AreaDesc, 100);
-        var sender      = a.SenderName.Replace("National Weather Service ", "NWS ");
+        var emoji           = AlertEmoji(a.Event);
+        var expiresStr      = a.Expires.HasValue ? a.Expires.Value.ToString("h:mm tt") : "—";
+        var area            = TrimTo(a.AreaDesc, 100);
+        var sender          = a.SenderName.Replace("National Weather Service ", "NWS ");
+        var instructionLine = !string.IsNullOrWhiteSpace(a.Instruction)
+            ? $"\n⚡ {TrimTo(a.Instruction.Trim(), 80)}"
+            : "";
 
         var allTags     = tags.Prepend("WeatherAlert").Distinct().ToArray();
         var hashtagLine = BlueskyPostHelper.HashtagLine(allTags);
@@ -98,6 +101,7 @@ internal static class WeatherAutoPost
             $"📍 {area}\n" +
             $"⏰ Expires: {expiresStr}\n" +
             $"Src: {sender}" +
+            instructionLine +
             hashtagLine;
     }
 

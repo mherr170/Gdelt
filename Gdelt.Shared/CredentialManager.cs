@@ -151,6 +151,14 @@ internal static class CredentialManager
     public static string? LoadYouTubeApiKey() =>
         SecretStore.Load("YouTubeApiKey")?.Password;
 
+    // ── GNews API Key (gun violence fallback source) ────────────────────────
+
+    public static void SaveGNewsApiKey(string apiKey) =>
+        SecretStore.Save("GNewsApiKey", "gnews", apiKey);
+
+    public static string? LoadGNewsApiKey() =>
+        SecretStore.Load("GNewsApiKey")?.Password;
+
     // ── All bot accounts (for growth worker) ─────────────────────────────────
     public static IReadOnlyList<(string Label, string Slug, string Handle, string Password)> LoadAllBlueskyAccounts()
     {

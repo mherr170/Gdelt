@@ -29,15 +29,19 @@ internal static class BlueskyGrowthAutoPost
         // Log follower count for growth tracking (fire-and-forget style — don't block on failure).
         await BlueskyFollowerLogger.LogAsync(client, slug, did, jwt, ct);
 
-        await RunSuggestionFollowsAsync(client, did, jwt, slug, handle, dailyFollowLimit, ct);
-        await BlueskyFollowBackAutoPost.RunAsync(client, did, jwt, slug, handle, dailyFollowLimit, ct);
+        // Suggestion-follows and follow-backs share one daily follow budget rather
+        // than each getting the full limit — otherwise an account can gain up to
+        // 2x dailyFollowLimit in a day, which isn't what the config value implies.
+        var suggestionsFollowed = await RunSuggestionFollowsAsync(client, did, jwt, slug, handle, dailyFollowLimit, ct);
+        var remainingBudget     = Math.Max(0, dailyFollowLimit - suggestionsFollowed);
+        await BlueskyFollowBackAutoPost.RunAsync(client, did, jwt, slug, handle, remainingBudget, ct);
         await BlueskyUnfollowAutoPost.RunAsync(client, did, jwt, slug, unfollowGraceDays, ct);
         await BlueskyTopicLikeAutoPost.RunAsync(client, did, jwt, slug, handle, dailyLikeLimit, ct);
 
         return new(GrowthOutcome.Ok);
     }
 
-    private static async Task RunSuggestionFollowsAsync(
+    private static async Task<int> RunSuggestionFollowsAsync(
         BlueskyFollowClient client, string did, string jwt,
         string slug, string handle, int limit, CancellationToken ct)
     {
@@ -45,14 +49,14 @@ internal static class BlueskyGrowthAutoPost
 
         List<SuggestedActor> suggestions;
         try { suggestions = await client.GetSuggestionsAsync(jwt, limit: 100, ct); }
-        catch (Exception ex) { PostLogger.Error(W, $"  [suggestions] Failed: {ex.Message}"); return; }
+        catch (Exception ex) { PostLogger.Error(W, $"  [suggestions] Failed: {ex.Message}"); return 0; }
 
         var candidates = suggestions
             .Where(a => !string.IsNullOrEmpty(a.Did) && !BlueskyFollowTracker.HasFollowed(slug, a.Did))
             .ToList();
 
         PostLogger.Info(W, $"  [suggestions] {suggestions.Count} returned — {candidates.Count} not yet followed");
-        if (candidates.Count == 0) return;
+        if (candidates.Count == 0) return 0;
 
         int followed = 0;
         foreach (var actor in candidates)
@@ -71,5 +75,6 @@ internal static class BlueskyGrowthAutoPost
         }
 
         PostLogger.Info(W, $"  [suggestions] {followed} new follow(s)");
+        return followed;
     }
 }

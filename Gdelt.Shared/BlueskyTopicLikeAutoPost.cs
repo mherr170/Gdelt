@@ -17,6 +17,8 @@ internal static class BlueskyTopicLikeAutoPost
             ["apod"]        = "astronomy NASA space",
             ["stock"]       = "stock market investing",
             ["weather"]     = "severe weather tornado hurricane",
+            ["streaming"]   = "streaming shows movies TV",
+            ["njbirds"]     = "backyard birds birdwatching",
         };
 
     public static async Task RunAsync(

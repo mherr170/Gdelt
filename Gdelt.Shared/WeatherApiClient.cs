@@ -73,6 +73,7 @@ internal sealed class WeatherApiClient : IDisposable
             Urgency     = p.Urgency     ?? "",
             Onset       = TryParseDate(p.Onset),
             Expires     = TryParseDate(p.Expires),
+            Instruction = p.Instruction,
         };
     }
 

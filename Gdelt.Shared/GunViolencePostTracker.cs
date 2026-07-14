@@ -6,8 +6,10 @@ internal static class GunViolencePostTracker
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "GdeltAutoPost", "posted_gunviolence.txt");
 
+    private static readonly TimeSpan SimilarityWindow = TimeSpan.FromDays(3);
+
     private static readonly HashSet<string> _posted;
-    private static readonly List<HashSet<string>> _postedWordSets;
+    private static readonly List<(DateTime PostedAt, string Title, HashSet<string> Words)> _postedWordSets;
     private static readonly object _lock = new();
 
     private static readonly HashSet<string> _stopWords = new(StringComparer.OrdinalIgnoreCase)
@@ -26,10 +28,14 @@ internal static class GunViolencePostTracker
 
         foreach (var line in File.ReadAllLines(_filePath).Where(l => l.Length > 0))
         {
-            var tab = line.IndexOf('\t');
-            _posted.Add(tab >= 0 ? line[..tab] : line);
-            if (tab >= 0)
-                _postedWordSets.Add(WordSet(line[(tab + 1)..]));
+            var fields = line.Split('\t');
+            _posted.Add(fields[0]);
+
+            // Legacy lines (url\ttitle, no timestamp) predate the similarity window
+            // feature and are old enough to be irrelevant to it — skip them here.
+            if (fields.Length >= 3 && DateTime.TryParse(fields[2], null,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var postedAt))
+                _postedWordSets.Add((postedAt, fields[1], WordSet(fields[1])));
         }
     }
 
@@ -41,8 +47,10 @@ internal static class GunViolencePostTracker
         catch { return null; }
     }
 
-    // Returns true if a title with significant word overlap has already been posted,
-    // catching same-incident articles from different news sources across polling runs.
+    // Returns true if a title with significant word overlap has already been posted
+    // *recently*, catching same-incident articles from different news sources across
+    // polling runs. Limited to a recency window so common domain vocabulary (e.g.
+    // "shot", "killed", "police") doesn't eventually match something in all-time history.
     public static bool HasSimilarIncidentBeenPosted(string title, double threshold = 0.30)
     {
         lock (_lock)
@@ -51,8 +59,12 @@ internal static class GunViolencePostTracker
             var candidate = WordSet(title);
             if (candidate.Count == 0) return false;
 
-            foreach (var stored in _postedWordSets)
+            var cutoff = DateTime.UtcNow - SimilarityWindow;
+
+            foreach (var (postedAt, _, stored) in _postedWordSets)
             {
+                if (postedAt < cutoff) continue;
+
                 var intersection = candidate.Count(w => stored.Contains(w));
                 var union        = candidate.Count + stored.Count - intersection;
                 if (union > 0 && (double)intersection / union >= threshold)
@@ -62,14 +74,30 @@ internal static class GunViolencePostTracker
         }
     }
 
-    public static void MarkPosted(string url, string title)
+    // Titles posted within the recency window, for semantic (LLM-based) duplicate
+    // checks that catch same-incident coverage the lexical filter misses due to
+    // differing phrasing between outlets.
+    public static IReadOnlyList<string> GetRecentPostedTitles()
     {
         lock (_lock)
         {
-            _posted.Add(url);
-            _postedWordSets.Add(WordSet(title));
+            var cutoff = DateTime.UtcNow - SimilarityWindow;
+            return _postedWordSets
+                .Where(p => p.PostedAt >= cutoff)
+                .Select(p => p.Title)
+                .ToList();
         }
-        PostTrackerStore.Append(_filePath, $"{url}\t{title}");
+    }
+
+    public static void MarkPosted(string url, string title)
+    {
+        var postedAt = DateTime.UtcNow;
+        lock (_lock)
+        {
+            _posted.Add(url);
+            _postedWordSets.Add((postedAt, title, WordSet(title)));
+        }
+        PostTrackerStore.Append(_filePath, $"{url}\t{title}\t{postedAt:O}");
     }
 
     private static HashSet<string> WordSet(string title) =>

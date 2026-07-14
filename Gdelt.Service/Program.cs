@@ -4,21 +4,37 @@ using GdeltSearchUI;
 var runOnce        = args.Contains("--run-once");
 var createPackMode = args.Contains("--create-starter-pack");
 var postBirdNow    = args.Contains("--post-bird-now");
+var postApodNow    = args.Contains("--post-apod-now");
 
-// One-shot mode: create the Bluesky starter pack then exit.
+// One-shot mode: sync the "Live Wire" Bluesky starter pack across the roster, then exit.
 if (createPackMode)
 {
     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-    await BlueskyStarterPackCreator.CreateAsync(cts.Token);
+    await StarterPackSync.SyncAllAsync(Console.WriteLine, cts.Token);
     return;
 }
 
-// One-shot mode: post the NJ Birds top videos now, then exit. Uses today's
-// 08:00 slot key so a subsequent service restart won't repost that slot.
+// One-shot mode: post today's NASA APOD now, then exit.
+if (postApodNow)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    var result = await ApodAutoPost.PostIfNeededAsync(cts.Token);
+    Console.WriteLine($"APOD one-shot result: {result.Outcome}{(result.ErrorMessage is null ? "" : $" — {result.ErrorMessage}")}");
+    return;
+}
+
+// One-shot mode: post the NJ Birds top videos now, then exit.
+// Picks the most recently elapsed scheduled time so the slot key matches what
+// the running service uses, preventing double-posts or silent no-ops.
 if (postBirdNow)
 {
     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-    var slot   = BirdAutoPost.SlotKey(DateTime.Now, new TimeOnly(8, 0));
+    var defaults = new[] { new TimeOnly(8, 0), new TimeOnly(18, 0) };
+    var now = DateTime.Now;
+    var due = defaults.Where(t => now.TimeOfDay >= t.ToTimeSpan())
+                      .DefaultIfEmpty(defaults[0])
+                      .Last();
+    var slot   = BirdAutoPost.SlotKey(now, due);
     var result = await BirdAutoPost.PostIfNeededAsync(slot, cts.Token);
     Console.WriteLine($"Bird one-shot result: {result.Outcome} (posted {result.PostedCount}){(result.ErrorMessage is null ? "" : $" — {result.ErrorMessage}")}");
     return;

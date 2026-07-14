@@ -68,10 +68,28 @@ internal static class GasAutoPost
         if (monthly.Count > MonthsToShow) monthly = monthly.TakeLast(MonthsToShow).ToList();
         if (monthly.Count >= 2)
         {
-            var png = GasPriceChart.RenderMonthlyAveragesPng(data.History, MonthsToShow);
-            var alt = BuildAltText(monthly);
-            result = await poster.PostTextWithImageAsync(
-                creds.Value.Handle, creds.Value.Password, text, png, alt, ct);
+            byte[] png;
+            try
+            {
+                png = GasPriceChart.RenderMonthlyAveragesPng(data.History, MonthsToShow);
+            }
+            catch (Exception ex)
+            {
+                PostLogger.Warn(W, $"Chart render failed ({ex.Message}) — posting text only");
+                png = [];
+            }
+
+            if (png.Length > 0)
+            {
+                var alt = BuildAltText(monthly);
+                result = await poster.PostTextWithImageAsync(
+                    creds.Value.Handle, creds.Value.Password, text, png, alt, ct);
+            }
+            else
+            {
+                result = await poster.PostTextAsync(
+                    creds.Value.Handle, creds.Value.Password, text, ct);
+            }
         }
         else
         {

@@ -20,6 +20,7 @@ internal sealed record ApodEntry
     public string  Title       { get; init; } = "";
     public string  Explanation { get; init; } = "";
     public string? ImageUrl    { get; init; }
+    public string? VideoUrl    { get; init; }  // watch URL for video APODs (YouTube etc.)
     public string? Copyright   { get; init; }
     public bool    IsVideo     { get; init; }
 }

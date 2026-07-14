@@ -64,16 +64,44 @@ internal static class ApodAutoPost
         using var poster = new BlueskyPoster();
         (bool Ok, string? Error) result;
 
-        var png = await TryDownloadImageAsync(entry.ImageUrl, ct);
-        if (png.Length > 0)
+        if (entry.IsVideo && !string.IsNullOrEmpty(entry.VideoUrl))
         {
-            var alt = BuildAltText(entry, headline);
-            result  = await poster.PostTextWithImageAsync(
-                creds.Value.Handle, creds.Value.Password, text, png, alt, ct);
+            // Post video APODs as a clickable link card so followers can watch
+            var thumb = entry.ImageUrl is not null ? await TryDownloadImageAsync(entry.ImageUrl, ct) : null;
+            if (thumb is { Length: > 0 })
+            {
+                result = await poster.PostExternalLinkAsync(
+                    creds.Value.Handle, creds.Value.Password,
+                    text:            text,
+                    linkUri:         entry.VideoUrl,
+                    cardTitle:       entry.Title,
+                    cardDescription: headline,
+                    thumbBytes:      thumb,
+                    ct);
+            }
+            else
+            {
+                // No thumbnail — embed the video link directly in the post text
+                PostLogger.Info(W, "No thumbnail available — including video link in post text");
+                var textWithLink = BuildPostText(entry, headline, tags, entry.VideoUrl);
+                result = await poster.PostTextWithLinkAsync(
+                    creds.Value.Handle, creds.Value.Password, textWithLink, entry.VideoUrl, ct);
+            }
         }
         else
         {
-            result = await poster.PostTextAsync(creds.Value.Handle, creds.Value.Password, text, ct);
+            var imageBytes = await TryDownloadImageAsync(entry.ImageUrl, ct);
+            if (imageBytes.Length > 0)
+            {
+                var alt = BuildAltText(entry, headline);
+                result = await poster.PostTextWithImageAsync(
+                    creds.Value.Handle, creds.Value.Password, text, imageBytes, alt, ct);
+            }
+            else
+            {
+                PostLogger.Warn(W, "Image unavailable — posting text only");
+                result = await poster.PostTextAsync(creds.Value.Handle, creds.Value.Password, text, ct);
+            }
         }
 
         if (result.Ok)
@@ -87,18 +115,20 @@ internal static class ApodAutoPost
         return new(ApodAutoPostOutcome.Failed, entry.Date, result.Error);
     }
 
-    internal static string BuildPostText(ApodEntry entry, string headline, string[] tags)
+    internal static string BuildPostText(ApodEntry entry, string headline, string[] tags, string? videoUrl = null)
     {
         var creditLine  = entry.Copyright is not null ? $"\n© {entry.Copyright}" : "";
         var videoNote   = entry.IsVideo ? " 🎬" : "";
         var allTags     = tags.Prepend("Astronomy").Prepend("APOD").Prepend("NASA").Distinct().ToArray();
         var hashtagLine = BlueskyPostHelper.HashtagLine(allTags);
+        var linkLine    = videoUrl is not null ? $"\n{videoUrl}" : "";
 
         return
             $"🔭 {entry.Title}{videoNote}\n\n" +
             $"📅 {entry.Date}" +
             creditLine +
             $"\nSrc: NASA Astronomy Picture of the Day" +
+            linkLine +
             hashtagLine;
     }
 
@@ -142,15 +172,39 @@ internal static class ApodAutoPost
                 if (bytes.Length <= maxBytes) return bytes;
             }
 
-            // Still too large — scale down
-            var scale  = Math.Sqrt((double)maxBytes / raw.Length) * 0.9;
-            var width  = (int)(bitmap.Width  * scale);
-            var height = (int)(bitmap.Height * scale);
-            using var resized = bitmap.Resize(new SKImageInfo(width, height), SKFilterQuality.Medium);
-            if (resized is null) return [];
-            using var img2  = SKImage.FromBitmap(resized);
-            using var data2 = img2.Encode(SKEncodedImageFormat.Jpeg, 75);
-            return data2.ToArray();
+            // Still too large — shrink 0.8× per iteration until it fits
+            SKBitmap? scaled = null;
+            try
+            {
+                SKBitmap src = bitmap;
+                while (true)
+                {
+                    int w = Math.Max(100, (int)(src.Width  * 0.8));
+                    int h = Math.Max(100, (int)(src.Height * 0.8));
+                    if (w >= src.Width)
+                    {
+                        // Already at minimum — last resort: encode at lowest quality
+                        using var imgMin  = SKImage.FromBitmap(src);
+                        using var dataMin = imgMin.Encode(SKEncodedImageFormat.Jpeg, 10);
+                        return dataMin.ToArray();
+                    }
+
+                    var next = src.Resize(new SKImageInfo(w, h), SKFilterQuality.Medium);
+                    scaled?.Dispose();
+                    scaled = next;
+                    if (next is null) return [];
+                    src = next;
+
+                    using var img  = SKImage.FromBitmap(src);
+                    using var data = img.Encode(SKEncodedImageFormat.Jpeg, 75);
+                    var bytes = data.ToArray();
+                    if (bytes.Length <= maxBytes) return bytes;
+                }
+            }
+            finally
+            {
+                scaled?.Dispose();
+            }
         }
         catch
         {

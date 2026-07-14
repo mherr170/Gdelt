@@ -15,10 +15,14 @@ internal sealed class DebtAutoPostWorker : PeriodicAutoPostWorker
     protected override void LogStarted() =>
         Logger.LogInformation("DebtAutoPostWorker started. Poll: 1h | Gate: {Gate}", _gateInterval);
 
+    // Gate combines two conditions: enough time since the last post (freshness),
+    // and local time past the morning peak window (engagement) — otherwise a
+    // fresh check right after midnight would post immediately at a dead hour.
     protected override bool ShouldTickNow()
     {
         var last = DebtPostTracker.GetLastPostedAt();
-        return last is null || DateTime.Now - last.Value >= _gateInterval;
+        var freshEnough = last is null || DateTime.Now - last.Value >= _gateInterval;
+        return freshEnough && TimeOnly.FromDateTime(DateTime.Now) >= new TimeOnly(8, 0);
     }
 
     protected override async Task TickAsync(CancellationToken ct)

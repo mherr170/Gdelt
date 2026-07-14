@@ -14,6 +14,11 @@ internal static class GunViolenceAutoPost
     private const int    LookbackH  = 6;
     private const int    MaxPerRun  = 5;
 
+    // GNews free tier delays article availability by up to ~12h, so the fallback
+    // needs a much wider window than GDELT's to actually surface anything —
+    // it's filling gaps left by earlier rate-limited cycles, not this cycle's news.
+    private const int GNewsLookbackH = 24;
+
     // 429 retry: 3 attempts with exponential backoff — total wait ~2 min if all fail.
     private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90)];
 
@@ -70,8 +75,11 @@ internal static class GunViolenceAutoPost
 
             if (!fetched)
             {
-                PostLogger.Warn(W, "Still rate-limited after all retries — skipping this cycle.");
-                return new(GunViolenceAutoPostOutcome.RateLimited);
+                PostLogger.Warn(W, "Still rate-limited after all retries — trying GNews fallback…");
+                var fallback = await TryGNewsFallbackAsync(ct);
+                if (fallback is null)
+                    return new(GunViolenceAutoPostOutcome.RateLimited);
+                result = fallback;
             }
         }
 
@@ -103,6 +111,7 @@ internal static class GunViolenceAutoPost
         }
 
         // Stage 2: LLM deduplication — collapse articles covering the same incident
+        // within this batch (same polling cycle).
         if (candidates.Count > 1)
         {
             var before = candidates.Count;
@@ -110,6 +119,31 @@ internal static class GunViolenceAutoPost
             var dropped = before - candidates.Count;
             if (dropped > 0)
                 PostLogger.Info(W, $"Dedup removed {dropped} duplicate(s) — {candidates.Count} unique incident(s) remain");
+        }
+
+        // Stage 2.5: LLM check against recently-posted incidents — catches the same
+        // incident covered by a different outlet in an earlier polling cycle, which
+        // Stage 2 misses (it only compares within the current batch) and the lexical
+        // filter above can miss when outlets phrase the story very differently.
+        var recentTitles = GunViolencePostTracker.GetRecentPostedTitles();
+        if (recentTitles.Count > 0 && candidates.Count > 0)
+        {
+            var kept = new List<GdeltArticle>();
+            foreach (var article in candidates)
+            {
+                var isDup = await LmStudioPostGenerator.IsDuplicateOfRecentPostsAsync(article.Title, recentTitles, ct);
+                if (isDup)
+                    PostLogger.Info(W, $"Duplicate of a recent post, skipping: \"{article.Title}\"");
+                else
+                    kept.Add(article);
+            }
+            candidates = kept;
+        }
+
+        if (candidates.Count == 0)
+        {
+            PostLogger.Info(W, "All candidates were duplicates of recently posted incidents");
+            return new(GunViolenceAutoPostOutcome.NoNewArticles);
         }
 
         var creds = CredentialManager.LoadGunViolenceBluesky();
@@ -166,5 +200,46 @@ internal static class GunViolenceAutoPost
         }
 
         return new(GunViolenceAutoPostOutcome.Posted, posted);
+    }
+
+    // Returns a GdeltSearchResult to fall into the normal pipeline on success, or
+    // null if no key is configured or the fallback itself failed (caller should
+    // then report RateLimited, same as if no fallback existed).
+    private static async Task<GdeltSearchResult?> TryGNewsFallbackAsync(CancellationToken ct)
+    {
+        var apiKey = CredentialManager.LoadGNewsApiKey();
+        if (apiKey is null)
+        {
+            PostLogger.Warn(W, "No GNews API key configured — skipping this cycle.");
+            return null;
+        }
+
+        using var gnews = new GNewsApiClient();
+        GNewsSearchResult fallbackResult;
+        try
+        {
+            fallbackResult = await gnews.SearchAsync(apiKey, Query, GNewsLookbackH, ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            PostLogger.Error(W, $"GNews fallback failed: {ex.Message}");
+            return null;
+        }
+
+        if (fallbackResult.QuotaExceeded)
+        {
+            PostLogger.Warn(W, "GNews daily quota exceeded — skipping this cycle.");
+            return null;
+        }
+
+        if (!fallbackResult.IsSuccess)
+        {
+            PostLogger.Warn(W, $"GNews fallback unavailable — skipping this cycle. ({fallbackResult.ErrorMessage ?? "rate limited"})");
+            return null;
+        }
+
+        PostLogger.Info(W, $"GNews fallback returned {fallbackResult.Articles.Count} article(s).");
+        return new GdeltSearchResult { Articles = fallbackResult.Articles };
     }
 }

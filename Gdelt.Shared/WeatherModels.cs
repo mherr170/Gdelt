@@ -43,4 +43,5 @@ internal sealed record WeatherAlert
     public string    Urgency     { get; init; } = "";
     public DateTime? Onset       { get; init; }
     public DateTime? Expires     { get; init; }
+    public string?   Instruction { get; init; }
 }

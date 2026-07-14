@@ -122,7 +122,33 @@ internal static class LmStudioPostGenerator
         "Output one integer per line, nothing else. " +
         "If every headline describes a different incident, return all numbers.";
 
+    private const string GunViolenceRecentDuplicatePrompt =
+        "You check whether a NEW shooting headline describes the SAME incident as any headline " +
+        "already posted (same location and same approximate victim count), even if worded very " +
+        "differently by a different news outlet. Reply YES if it matches any already-posted headline, " +
+        "otherwise reply NO. Reply with EXACTLY one word: YES or NO.";
+
     private static readonly Regex _nonAlpha = new(@"[^a-zA-Z0-9]", RegexOptions.Compiled);
+
+    public static async Task<bool> IsDuplicateOfRecentPostsAsync(
+        string candidateTitle, IReadOnlyList<string> recentPostedTitles, CancellationToken ct = default)
+    {
+        if (recentPostedTitles.Count == 0) return false;
+
+        var userMessage = $"NEW: {candidateTitle}\n\nALREADY POSTED:\n" +
+            string.Join("\n", recentPostedTitles.Select((t, i) => $"{i + 1}. {t}"));
+
+        try
+        {
+            var response = await LmStudioClient.CallAsync(GunViolenceRecentDuplicatePrompt, userMessage, 8, 0.0, ct);
+            return response.Trim().StartsWith("YES", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // LLM unavailable — fall back to the lexical filter only
+            return false;
+        }
+    }
 
     public static async Task<List<GdeltArticle>> DeduplicateBySameEventAsync(List<GdeltArticle> articles, CancellationToken ct = default)
     {
@@ -474,8 +500,11 @@ internal static class LmStudioPostGenerator
         var fallbackTags     = new[] { EventTag(alert.Event), "WeatherAlert" };
         var fallbackHeadline = TrimTo(alert.Headline.Length > 0 ? alert.Headline : alert.Event, 130);
 
+        var instructionPart = !string.IsNullOrWhiteSpace(alert.Instruction)
+            ? $" | Instruction: {TrimTo(alert.Instruction.Trim(), 100)}"
+            : "";
         var userMessage =
-            $"Event: {alert.Event} | Area: {TrimTo(alert.AreaDesc, 80)} | Headline: {TrimTo(alert.Headline, 150)}";
+            $"Event: {alert.Event} | Area: {TrimTo(alert.AreaDesc, 80)} | Headline: {TrimTo(alert.Headline, 150)}{instructionPart}";
 
         try
         {
@@ -541,6 +570,39 @@ internal static class LmStudioPostGenerator
         {
             AppLogger.Log($"LM Studio unavailable ({ex.Message}) — using fallback APOD caption.");
             return (fallbackHeadline, fallbackTags);
+        }
+    }
+
+    private const string BirdSystemPrompt =
+        "You generate hashtags for Backyard Birds of New Jersey YouTube posts on Bluesky. " +
+        "Given a bird video title, reply with EXACTLY this one line and nothing else:\n\n" +
+        "TAGS: <tag1>, <tag2>, <tag3>\n\n" +
+        "Tag rules: pick EXACTLY THREE tags. " +
+        "Always include at least one broad discovery tag: Birding, BirdWatching, or BackyardBirds. " +
+        "Include the specific bird species as a tag when identifiable (e.g. Cardinal, BlueBird, Woodpecker, Hummingbird, Sparrow, Finch, Robin, Warbler, Hawk). " +
+        "Include NewJersey as a tag when it adds context. " +
+        "PascalCase for multi-word tags; never use generic words like Bird, Birds, Video, YouTube, Watch, Nature, Wildlife, NJ.";
+
+    public static async Task<string[]> GenerateBirdPostAsync(YouTubeVideo video, CancellationToken ct = default)
+    {
+        var fallbackTags = new[] { "Birding", "BackyardBirds", "NewJersey" };
+
+        try
+        {
+            var text = await LmStudioClient.CallAsync(BirdSystemPrompt, video.Title, 64, 0.5, ct);
+            if (string.IsNullOrEmpty(text))
+            {
+                AppLogger.Log("LM Studio error — using fallback bird tags.");
+                return fallbackTags;
+            }
+            AppLogger.Log($"LM Studio bird response: {text.Replace('\n', '|')}");
+            var (_, _, tags) = Parse(text, video.Title);
+            return tags.Length > 0 ? tags : fallbackTags;
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"LM Studio unavailable ({ex.Message}) — using fallback bird tags.");
+            return fallbackTags;
         }
     }
 

@@ -24,13 +24,14 @@ internal sealed class LauncherForm : Form
     private Label _blueskyMetricsStat = null!;
     private Label _streamingStat      = null!;
     private Label _birdStat           = null!;
+    private Label _starterPackStat    = null!;
 
     private readonly System.Windows.Forms.Timer _refreshTimer;
 
     public LauncherForm()
     {
         Text            = "GDELT Dashboard";
-        Size            = new Size(540, 538);
+        Size            = new Size(540, 616);
         MinimumSize     = new Size(400, 220);
         StartPosition   = FormStartPosition.CenterScreen;
         Font            = new Font("Segoe UI", 9.5f);
@@ -216,19 +217,19 @@ internal sealed class LauncherForm : Form
         {
             Dock        = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount    = 12,
+            RowCount    = 13,
             Padding     = new Padding(12, 8, 12, 12),
             BackColor   = DarkTheme.Background,
         };
 
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 12; i++)
+        for (int i = 0; i < 13; i++)
             table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         table.Controls.Add(MakeGunViolenceButton(), 0, 0);
         _gunViolenceStat = MakeStatLabel("");
-        table.Controls.Add(_gunViolenceStat, 1, 0);
+        table.Controls.Add(MakeGunViolenceStatCell(), 1, 0);
 
         table.Controls.Add(MakeGasPriceButton(), 0, 1);
         _gasStat = MakeStatLabel("");
@@ -273,6 +274,10 @@ internal sealed class LauncherForm : Form
         table.Controls.Add(MakeBirdButton(), 0, 11);
         _birdStat = MakeStatLabel("");
         table.Controls.Add(_birdStat, 1, 11);
+
+        table.Controls.Add(MakeStarterPackButton(), 0, 12);
+        _starterPackStat = MakeStatLabel("");
+        table.Controls.Add(_starterPackStat, 1, 12);
 
         return table;
     }
@@ -330,6 +335,88 @@ internal sealed class LauncherForm : Form
             credLoader: CredentialManager.LoadGunViolenceBluesky,
             credSaver:  CredentialManager.SaveGunViolenceBluesky,
             credTitle:  "Bluesky Account — US Gun Violence").Show();
+        return btn;
+    }
+
+    // Stat label plus a small key button for the GNews fallback source (used
+    // when GDELT rate-limits) — gun violence has no dedicated settings form to
+    // hang an "API Key" button off of like APOD/gas prices do, so it lives here.
+    private Panel MakeGunViolenceStatCell()
+    {
+        var panel = new Panel { Dock = DockStyle.Fill, BackColor = DarkTheme.Background };
+
+        var keyBtn = new Button
+        {
+            Text      = "🔑",
+            Dock      = DockStyle.Right,
+            Width     = 26,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = DarkTheme.Raised,
+            ForeColor = DarkTheme.TextPrimary,
+        };
+        keyBtn.FlatAppearance.BorderColor = DarkTheme.Input;
+
+        var current = CredentialManager.LoadGNewsApiKey() ?? "";
+        var toolTip = new ToolTip();
+        toolTip.SetToolTip(keyBtn,
+            $"GNews API key (fallback when GDELT rate-limits) — {(current.Length > 0 ? "set" : "not set")}");
+
+        keyBtn.Click += (_, _) =>
+        {
+            var key = ApiKeyPrompt.Show(this, "GNews API key (free at gnews.io — used as a fallback when GDELT rate-limits):");
+            if (key is not null)
+            {
+                CredentialManager.SaveGNewsApiKey(key);
+                toolTip.SetToolTip(keyBtn, "GNews API key (fallback when GDELT rate-limits) — set");
+            }
+        };
+
+        panel.Controls.Add(_gunViolenceStat);
+        panel.Controls.Add(keyBtn);
+        return panel;
+    }
+
+    // Manually re-runs StarterPackSync across the roster — this is an occasional
+    // curation action (run once, re-run only if the roster changes), not a
+    // scheduled worker, so it lives here rather than in the auto-post service.
+    private Button MakeStarterPackButton()
+    {
+        var btn = MakeButton("🔗 Live Wire", DarkTheme.Raised);
+        btn.Click += async (_, _) =>
+        {
+            btn.Enabled = false;
+            _starterPackStat.Text      = "Syncing…";
+            _starterPackStat.ForeColor = DarkTheme.TextMuted;
+
+            var lines = new List<string>();
+            try
+            {
+                await StarterPackSync.SyncAllAsync(line =>
+                {
+                    lines.Add(line);
+                    PostLogger.Info("starterpack", line);
+                });
+
+                var failures = lines.Count(l => l.Contains("Failed") || l.Contains("skipped"));
+                _starterPackStat.Text      = failures == 0 ? "✓ Synced all accounts" : $"⚠ {failures} issue(s) — see log";
+                _starterPackStat.ForeColor = failures == 0
+                    ? Color.FromArgb(0x4F, 0xB5, 0x6E)
+                    : Color.FromArgb(0xB8, 0x76, 0x0B);
+            }
+            catch (Exception ex)
+            {
+                PostLogger.Error("starterpack", $"Sync aborted: {ex.Message}");
+                _starterPackStat.Text      = "✗ Sync failed — see log";
+                _starterPackStat.ForeColor = Color.FromArgb(0xC0, 0x50, 0x50);
+            }
+            finally
+            {
+                btn.Enabled = true;
+            }
+
+            MessageBox.Show(string.Join(Environment.NewLine, lines), "Starter Pack Sync",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        };
         return btn;
     }
 

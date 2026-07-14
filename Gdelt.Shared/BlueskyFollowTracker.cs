@@ -24,6 +24,28 @@ internal static class BlueskyFollowTracker
         PostTrackerStore.Append(DatedFilePath(slug), $"{did}\t{DateTime.UtcNow:O}");
     }
 
+    // Removes a DID's grace-period entry once it's been resolved one way or the
+    // other (unfollowed, or confirmed reciprocal past the grace period) so
+    // GetFollowedBefore doesn't keep re-surfacing it — and the unfollow worker
+    // doesn't keep re-fetching followers/follow-records for it — forever.
+    public static void MarkResolved(string slug, string did)
+    {
+        var path = DatedFilePath(slug);
+        if (!File.Exists(path)) return;
+        lock (_lock)
+        {
+            var kept = File.ReadAllLines(path)
+                .Where(line =>
+                {
+                    var tab = line.IndexOf('\t');
+                    var lineDid = tab < 0 ? line : line[..tab];
+                    return !lineDid.Equals(did, StringComparison.OrdinalIgnoreCase);
+                })
+                .ToArray();
+            File.WriteAllLines(path, kept);
+        }
+    }
+
     // Returns DIDs that were followed before cutoffUtc and haven't yet been unfollowed.
     public static IReadOnlyList<string> GetFollowedBefore(string slug, DateTime cutoffUtc)
     {

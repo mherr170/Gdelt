@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace GdeltSearchUI;
@@ -23,24 +24,26 @@ internal sealed class BlueskyPoster : IDisposable
         var (text, facets) = await BuildPostAsync(title, url);
 
         // 3. Create record
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+        using var postResp = await SendWithRetryAsync(() =>
         {
-            Content = JsonContent.Create(new
+            var r = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
             {
-                repo = session.Did,
-                collection = "app.bsky.feed.post",
-                record = new PostRecord
+                Content = JsonContent.Create(new
                 {
-                    Text = text,
-                    CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                    Langs = ["en"],
-                    Facets = facets,
-                },
-            }),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
-
-        var postResp = await _http.SendAsync(req, ct);
+                    repo = session.Did,
+                    collection = "app.bsky.feed.post",
+                    record = new PostRecord
+                    {
+                        Text = text,
+                        CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                        Langs = ["en"],
+                        Facets = facets,
+                    },
+                }),
+            };
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+            return r;
+        }, ct);
         if (!postResp.IsSuccessStatusCode)
         {
             var body = await postResp.Content.ReadAsStringAsync(ct);
@@ -67,7 +70,9 @@ internal sealed class BlueskyPoster : IDisposable
         {
             Content = new ByteArrayContent(imageBytes),
         };
-        blobReq.Content.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        var imageMime = imageBytes.Length >= 3 && imageBytes[0] == 0xFF && imageBytes[1] == 0xD8 && imageBytes[2] == 0xFF
+            ? "image/jpeg" : "image/png";
+        blobReq.Content.Headers.ContentType = new MediaTypeHeaderValue(imageMime);
         blobReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
 
         var blobResp = await _http.SendAsync(blobReq, ct);
@@ -92,18 +97,20 @@ internal sealed class BlueskyPoster : IDisposable
             },
         };
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+        using var postResp = await SendWithRetryAsync(() =>
         {
-            Content = JsonContent.Create(new
+            var r = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
             {
-                repo       = session.Did,
-                collection = "app.bsky.feed.post",
-                record,
-            }),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
-
-        var postResp = await _http.SendAsync(req, ct);
+                Content = JsonContent.Create(new
+                {
+                    repo       = session.Did,
+                    collection = "app.bsky.feed.post",
+                    record,
+                }),
+            };
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+            return r;
+        }, ct);
         if (!postResp.IsSuccessStatusCode)
         {
             var body = await postResp.Content.ReadAsStringAsync(ct);
@@ -146,6 +153,11 @@ internal sealed class BlueskyPoster : IDisposable
                 var blobJson = await blobResp.Content.ReadFromJsonAsync<UploadBlobResponse>(cancellationToken: ct);
                 if (blobJson is not null) thumbBlob = blobJson.Blob;
             }
+            else
+            {
+                var errBody = await blobResp.Content.ReadAsStringAsync(ct);
+                PostLogger.Warn("bluesky", $"Thumbnail upload failed ({(int)blobResp.StatusCode}) — posting card without image: {errBody[..Math.Min(errBody.Length, 200)]}");
+            }
         }
 
         // 2. Create record with external embed.
@@ -167,18 +179,20 @@ internal sealed class BlueskyPoster : IDisposable
             },
         };
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+        using var postResp = await SendWithRetryAsync(() =>
         {
-            Content = JsonContent.Create(new
+            var r = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
             {
-                repo       = session.Did,
-                collection = "app.bsky.feed.post",
-                record,
-            }),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
-
-        var postResp = await _http.SendAsync(req, ct);
+                Content = JsonContent.Create(new
+                {
+                    repo       = session.Did,
+                    collection = "app.bsky.feed.post",
+                    record,
+                }),
+            };
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+            return r;
+        }, ct);
         if (!postResp.IsSuccessStatusCode)
         {
             var body = await postResp.Content.ReadAsStringAsync(ct);
@@ -199,24 +213,26 @@ internal sealed class BlueskyPoster : IDisposable
         if (si.LengthInTextElements > MaxPostChars)
             text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
 
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+        using var postResp = await SendWithRetryAsync(() =>
         {
-            Content = JsonContent.Create(new
+            var r = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
             {
-                repo = session.Did,
-                collection = "app.bsky.feed.post",
-                record = new HashtagPostRecord
+                Content = JsonContent.Create(new
                 {
-                    Text = text,
-                    CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                    Langs = ["en"],
-                    Facets = BuildHashtagFacets(text),
-                },
-            }),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
-
-        var postResp = await _http.SendAsync(req, ct);
+                    repo = session.Did,
+                    collection = "app.bsky.feed.post",
+                    record = new HashtagPostRecord
+                    {
+                        Text = text,
+                        CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                        Langs = ["en"],
+                        Facets = BuildHashtagFacets(text),
+                    },
+                }),
+            };
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+            return r;
+        }, ct);
         if (!postResp.IsSuccessStatusCode)
         {
             var body = await postResp.Content.ReadAsStringAsync(ct);
@@ -224,6 +240,117 @@ internal sealed class BlueskyPoster : IDisposable
         }
 
         return (true, null);
+    }
+
+    // Posts pre-built text with a clickable link facet for linkUrl (which must appear verbatim in text)
+    // plus hashtag facets — used when no thumbnail card is available for video posts.
+    public async Task<(bool Ok, string? Error)> PostTextWithLinkAsync(
+        string handle, string appPassword, string text, string linkUrl, CancellationToken ct)
+    {
+        var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
+        if (authError is not null) return (false, authError);
+
+        var si = new System.Globalization.StringInfo(text);
+        if (si.LengthInTextElements > MaxPostChars)
+            text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
+
+        var facets = BuildMixedFacetsJson(text, linkUrl);
+
+        using var postResp = await SendWithRetryAsync(() =>
+        {
+            var r = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+            {
+                Content = JsonContent.Create(new
+                {
+                    repo       = session.Did,
+                    collection = "app.bsky.feed.post",
+                    record     = new PostRecordWithJsonFacets
+                    {
+                        Text      = text,
+                        CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                        Langs     = ["en"],
+                        Facets    = facets,
+                    },
+                }),
+            };
+            r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+            return r;
+        }, ct);
+        if (!postResp.IsSuccessStatusCode)
+        {
+            var body = await postResp.Content.ReadAsStringAsync(ct);
+            return (false, $"Post failed ({(int)postResp.StatusCode}):\n{body}");
+        }
+
+        return (true, null);
+    }
+
+    // Builds a JsonArray of facets (link + hashtags) without relying on STJ runtime-type
+    // resolution, which does not serialize List<object> feature elements correctly.
+    private static JsonArray BuildMixedFacetsJson(string text, string? linkUrl)
+    {
+        var arr = new JsonArray();
+
+        if (linkUrl is not null)
+        {
+            var idx = text.IndexOf(linkUrl, StringComparison.Ordinal);
+            if (idx >= 0)
+            {
+                var byteStart = Encoding.UTF8.GetByteCount(text[..idx]);
+                var byteEnd   = byteStart + Encoding.UTF8.GetByteCount(linkUrl);
+                arr.Add(new JsonObject
+                {
+                    ["index"]    = new JsonObject { ["byteStart"] = byteStart, ["byteEnd"] = byteEnd },
+                    ["features"] = new JsonArray { new JsonObject { ["$type"] = "app.bsky.richtext.facet#link", ["uri"] = linkUrl } },
+                });
+            }
+        }
+
+        var i = 0;
+        while (i < text.Length)
+        {
+            if (text[i] != '#') { i++; continue; }
+            if (i > 0 && !char.IsWhiteSpace(text[i - 1])) { i++; continue; }
+            var start = i + 1;
+            var end   = start;
+            while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_')) end++;
+            if (end == start) { i++; continue; }
+            var tag       = text[start..end];
+            var byteStart = Encoding.UTF8.GetByteCount(text[..i]);
+            var byteEnd   = byteStart + Encoding.UTF8.GetByteCount(text[i..end]);
+            arr.Add(new JsonObject
+            {
+                ["index"]    = new JsonObject { ["byteStart"] = byteStart, ["byteEnd"] = byteEnd },
+                ["features"] = new JsonArray { new JsonObject { ["$type"] = "app.bsky.richtext.facet#tag", ["tag"] = tag } },
+            });
+            i = end;
+        }
+
+        return arr;
+    }
+
+    private async Task<HttpResponseMessage> SendWithRetryAsync(
+        Func<HttpRequestMessage> requestFactory, CancellationToken ct)
+    {
+        const int maxAttempts = 3;
+        for (int attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            using var req = requestFactory();
+            var response = await _http.SendAsync(req, ct);
+
+            var status = (int)response.StatusCode;
+            bool retryable = (status == 429 || status == 502) && attempt < maxAttempts - 1;
+            if (!retryable) return response;
+
+            TimeSpan delay = status == 429 && response.Headers.RetryAfter?.Delta.HasValue == true
+                ? response.Headers.RetryAfter.Delta.Value
+                : TimeSpan.FromSeconds(Math.Pow(2, attempt + 1)); // 2s, 4s
+
+            response.Dispose();
+            PostLogger.Warn("bluesky", $"createRecord returned {status} — retrying in {delay.TotalSeconds:F0}s (attempt {attempt + 1}/{maxAttempts})");
+            await Task.Delay(delay, ct);
+        }
+        throw new InvalidOperationException("Unreachable");
     }
 
     private async Task<(SessionResponse Session, string? Error)> AuthenticateAsync(
@@ -396,6 +523,15 @@ internal sealed class BlueskyPoster : IDisposable
     {
         [JsonPropertyName("alt")]   public string                        Alt   { get; init; } = "";
         [JsonPropertyName("image")] public System.Text.Json.JsonElement  Image { get; init; }
+    }
+
+    private sealed class PostRecordWithJsonFacets
+    {
+        [JsonPropertyName("$type")]     public string    Type      { get; init; } = "app.bsky.feed.post";
+        [JsonPropertyName("text")]      public string    Text      { get; init; } = "";
+        [JsonPropertyName("createdAt")] public string    CreatedAt { get; init; } = "";
+        [JsonPropertyName("langs")]     public string[]  Langs     { get; init; } = [];
+        [JsonPropertyName("facets")]    public JsonArray Facets    { get; init; } = [];
     }
 
     private sealed class PostRecordWithExternal

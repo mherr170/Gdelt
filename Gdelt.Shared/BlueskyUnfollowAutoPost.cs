@@ -22,7 +22,7 @@ internal static class BlueskyUnfollowAutoPost
         HashSet<string> followers;
         try
         {
-            var list = await client.GetFollowersAsync(did, jwt, maxResults: 500, ct);
+            var list = await client.GetFollowersAsync(did, jwt, maxResults: BlueskyFollowClient.MaxRelationshipFetch, ct);
             followers = new HashSet<string>(list.Select(a => a.Did), StringComparer.OrdinalIgnoreCase);
         }
         catch (Exception ex)
@@ -33,6 +33,12 @@ internal static class BlueskyUnfollowAutoPost
 
         var toUnfollow = candidates.Where(d => !followers.Contains(d)).ToList();
         PostLogger.Info(W, $"  [unfollow] {toUnfollow.Count} didn't follow back");
+
+        // Reciprocal follows are resolved for good — they've cleared the grace
+        // period and are following back, so there's no reason to keep re-checking
+        // them on every future run.
+        foreach (var reciprocalDid in candidates.Where(followers.Contains))
+            BlueskyFollowTracker.MarkResolved(slug, reciprocalDid);
 
         if (toUnfollow.Count == 0) return;
 
@@ -51,11 +57,15 @@ internal static class BlueskyUnfollowAutoPost
             ct.ThrowIfCancellationRequested();
 
             if (!rkeys.TryGetValue(subjectDid, out var rkey))
-                continue; // already unfollowed outside of this system
+            {
+                BlueskyFollowTracker.MarkResolved(slug, subjectDid); // already unfollowed outside of this system
+                continue;
+            }
 
             var (ok, error) = await client.UnfollowAsync(did, rkey, jwt, ct);
             if (!ok) { PostLogger.Warn(W, $"  [unfollow] Failed ({subjectDid}): {error}"); continue; }
 
+            BlueskyFollowTracker.MarkResolved(slug, subjectDid);
             unfollowed++;
             PostLogger.Success(W, $"  [unfollow] Unfollowed {subjectDid} ({unfollowed}/{toUnfollow.Count})");
             await Task.Delay(1000, ct);

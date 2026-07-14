@@ -14,6 +14,12 @@ internal sealed class SuggestedActor
 internal sealed class BlueskyFollowClient : IDisposable
 {
     private const string BaseUrl = "https://bsky.social/xrpc";
+
+    // Shared page-size ceiling for follower/following reads. Callers used to pass
+    // inconsistent values (200 here, 500 there); one constant keeps follow-back and
+    // the unfollow reciprocity check looking at the same window of relationships.
+    public const int MaxRelationshipFetch = 1000;
+
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
     public async Task<(string Did, string AccessJwt, string? Error)> AuthenticateAsync(
@@ -56,84 +62,6 @@ internal sealed class BlueskyFollowClient : IDisposable
         using var resp = await _http.SendAsync(req, ct);
         if (!resp.IsSuccessStatusCode) return null;
         return await resp.Content.ReadFromJsonAsync<BskyProfile>(cancellationToken: ct);
-    }
-
-    // Creates an app.bsky.graph.list and returns its AT URI.
-    public async Task<string> CreateListAsync(
-        string repoDid, string accessJwt, string name, string description, CancellationToken ct = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
-        {
-            Content = JsonContent.Create(new
-            {
-                repo       = repoDid,
-                collection = "app.bsky.graph.list",
-                record     = new ListRecord
-                {
-                    Name        = name,
-                    Description = description,
-                    CreatedAt   = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                },
-            }),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessJwt);
-        using var resp = await _http.SendAsync(req, ct);
-        resp.EnsureSuccessStatusCode();
-        var result = await resp.Content.ReadFromJsonAsync<CreateRecordResponse>(cancellationToken: ct)
-            ?? throw new InvalidOperationException("Empty createRecord response.");
-        return result.Uri;
-    }
-
-    // Adds one member to an existing list.
-    public async Task CreateListItemAsync(
-        string repoDid, string accessJwt, string listUri, string subjectDid, CancellationToken ct = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
-        {
-            Content = JsonContent.Create(new
-            {
-                repo       = repoDid,
-                collection = "app.bsky.graph.listitem",
-                record     = new ListItemRecord
-                {
-                    Subject   = subjectDid,
-                    List      = listUri,
-                    CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                },
-            }),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessJwt);
-        using var resp = await _http.SendAsync(req, ct);
-        resp.EnsureSuccessStatusCode();
-    }
-
-    // Creates the starter pack record and returns (uri, rkey).
-    public async Task<(string Uri, string Rkey)> CreateStarterPackAsync(
-        string repoDid, string accessJwt,
-        string name, string description, string listUri, CancellationToken ct = default)
-    {
-        using var req = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
-        {
-            Content = JsonContent.Create(new
-            {
-                repo       = repoDid,
-                collection = "app.bsky.graph.starterpack",
-                record     = new StarterPackRecord
-                {
-                    Name        = name,
-                    Description = description,
-                    List        = listUri,
-                    CreatedAt   = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                },
-            }),
-        };
-        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessJwt);
-        using var resp = await _http.SendAsync(req, ct);
-        resp.EnsureSuccessStatusCode();
-        var result = await resp.Content.ReadFromJsonAsync<CreateRecordResponse>(cancellationToken: ct)
-            ?? throw new InvalidOperationException("Empty createRecord response.");
-        var rkey = result.Uri.Split('/').Last();
-        return (result.Uri, rkey);
     }
 
     public async Task<List<SuggestedActor>> GetSuggestionsAsync(
@@ -329,38 +257,6 @@ internal sealed class BlueskyFollowClient : IDisposable
     {
         [JsonPropertyName("did")]       public string Did       { get; init; } = "";
         [JsonPropertyName("accessJwt")] public string AccessJwt { get; init; } = "";
-    }
-
-    private sealed class CreateRecordResponse
-    {
-        [JsonPropertyName("uri")] public string Uri { get; init; } = "";
-        [JsonPropertyName("cid")] public string Cid { get; init; } = "";
-    }
-
-    private sealed class ListRecord
-    {
-        [JsonPropertyName("$type")]       public string Type        { get; init; } = "app.bsky.graph.list";
-        [JsonPropertyName("purpose")]     public string Purpose     { get; init; } = "app.bsky.graph.defs#curatelist";
-        [JsonPropertyName("name")]        public string Name        { get; init; } = "";
-        [JsonPropertyName("description")] public string Description { get; init; } = "";
-        [JsonPropertyName("createdAt")]   public string CreatedAt   { get; init; } = "";
-    }
-
-    private sealed class ListItemRecord
-    {
-        [JsonPropertyName("$type")]     public string Type      { get; init; } = "app.bsky.graph.listitem";
-        [JsonPropertyName("subject")]   public string Subject   { get; init; } = "";
-        [JsonPropertyName("list")]      public string List      { get; init; } = "";
-        [JsonPropertyName("createdAt")] public string CreatedAt { get; init; } = "";
-    }
-
-    private sealed class StarterPackRecord
-    {
-        [JsonPropertyName("$type")]       public string Type        { get; init; } = "app.bsky.graph.starterpack";
-        [JsonPropertyName("name")]        public string Name        { get; init; } = "";
-        [JsonPropertyName("description")] public string Description { get; init; } = "";
-        [JsonPropertyName("list")]        public string List        { get; init; } = "";
-        [JsonPropertyName("createdAt")]   public string CreatedAt   { get; init; } = "";
     }
 
     private sealed class GetSuggestionsResponse

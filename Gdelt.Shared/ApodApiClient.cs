@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.RegularExpressions;
 
 namespace GdeltSearchUI;
 
@@ -24,10 +25,13 @@ internal sealed class ApodApiClient : IDisposable
         return response is null ? null : Map(response);
     }
 
+    private static readonly Regex _ytEmbed = new(@"youtube\.com/embed/([^?&/]+)", RegexOptions.Compiled);
+
     private static ApodEntry Map(ApodApiResponse r)
     {
         var isVideo  = r.MediaType?.Equals("video", StringComparison.OrdinalIgnoreCase) == true;
         var imageUrl = isVideo ? r.ThumbnailUrl : (r.Url ?? r.HdUrl);
+        var videoUrl = isVideo ? ToWatchUrl(r.Url) : null;
 
         return new ApodEntry
         {
@@ -35,9 +39,18 @@ internal sealed class ApodApiClient : IDisposable
             Title       = r.Title       ?? "",
             Explanation = r.Explanation ?? "",
             ImageUrl    = imageUrl,
+            VideoUrl    = videoUrl,
             Copyright   = string.IsNullOrWhiteSpace(r.Copyright) ? null : r.Copyright.Trim(),
             IsVideo     = isVideo,
         };
+    }
+
+    // Converts YouTube embed URLs to watch URLs; passes other URLs through unchanged.
+    private static string? ToWatchUrl(string? url)
+    {
+        if (url is null) return null;
+        var m = _ytEmbed.Match(url);
+        return m.Success ? $"https://www.youtube.com/watch?v={m.Groups[1].Value}" : url;
     }
 
     public void Dispose() => _http.Dispose();

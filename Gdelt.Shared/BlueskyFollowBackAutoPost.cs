@@ -14,8 +14,8 @@ internal static class BlueskyFollowBackAutoPost
         HashSet<string> following;
         try
         {
-            followers = await client.GetFollowersAsync(did, jwt, maxResults: 200, ct);
-            following  = await client.GetFollowDidsAsync(did, jwt, maxResults: 200, ct);
+            followers = await client.GetFollowersAsync(did, jwt, maxResults: BlueskyFollowClient.MaxRelationshipFetch, ct);
+            following  = await client.GetFollowDidsAsync(did, jwt, maxResults: BlueskyFollowClient.MaxRelationshipFetch, ct);
         }
         catch (Exception ex)
         {

@@ -76,26 +76,30 @@ internal static class QuakeAutoPost
             (bool Ok, string? Error) result;
             if (quake.Latitude.HasValue && quake.Longitude.HasValue)
             {
-                List<QuakeEvent> nearby;
-                using (var client = new QuakeApiClient())
+                byte[] png = [];
+                string alt = "";
+                try
                 {
-                    nearby = await client.GetNearbyAsync(
-                        quake.Latitude.Value, quake.Longitude.Value,
-                        radiusKm: 500, hours: 24, minMagnitude: 3.0, ct);
+                    List<QuakeEvent> nearby;
+                    using (var client = new QuakeApiClient())
+                    {
+                        nearby = await client.GetNearbyAsync(
+                            quake.Latitude.Value, quake.Longitude.Value,
+                            radiusKm: 500, hours: 24, minMagnitude: 3.0, ct);
+                    }
+                    png = await QuakeMap.RenderPngAsync(quake, nearby, ct: ct);
+                    if (png.Length > 0)
+                        alt = BuildMapAltText(quake, nearby);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    PostLogger.Warn(W, $"Map fetch/render failed for {quake.Id} ({ex.Message}) — posting text only");
                 }
 
-                var png = await QuakeMap.RenderPngAsync(quake, nearby, ct: ct);
-                if (png.Length > 0)
-                {
-                    var alt = BuildMapAltText(quake, nearby);
-                    result = await poster.PostTextWithImageAsync(
-                        creds.Value.Handle, creds.Value.Password, text, png, alt, ct);
-                }
-                else
-                {
-                    result = await poster.PostTextAsync(
-                        creds.Value.Handle, creds.Value.Password, text, ct);
-                }
+                result = png.Length > 0
+                    ? await poster.PostTextWithImageAsync(creds.Value.Handle, creds.Value.Password, text, png, alt, ct)
+                    : await poster.PostTextAsync(creds.Value.Handle, creds.Value.Password, text, ct);
             }
             else
             {

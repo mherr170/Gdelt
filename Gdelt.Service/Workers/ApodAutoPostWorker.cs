@@ -10,6 +10,13 @@ internal sealed class ApodAutoPostWorker : PeriodicAutoPostWorker
     public ApodAutoPostWorker(ILogger<ApodAutoPostWorker> logger)
         : base(logger, "apod", TimeSpan.FromHours(1)) { }
 
+    // NASA publishes new APOD images overnight (~midnight-1am ET) — polling hourly
+    // would post the moment it's available, which is a low-engagement hour. Hold
+    // off until the morning peak window; PostIfNeededAsync's own AlreadyPosted
+    // check makes it safe to keep polling hourly after that.
+    protected override bool ShouldTickNow() =>
+        TimeOnly.FromDateTime(DateTime.Now) >= new TimeOnly(8, 0);
+
     protected override async Task TickAsync(CancellationToken ct)
     {
         var result = await ApodAutoPost.PostIfNeededAsync(ct);
