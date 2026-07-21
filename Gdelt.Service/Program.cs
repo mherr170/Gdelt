@@ -3,6 +3,8 @@ using GdeltSearchUI;
 
 var runOnce        = args.Contains("--run-once");
 var createPackMode = args.Contains("--create-starter-pack");
+var pinIntroMode   = args.Contains("--pin-intro-posts");
+var pinIntroDryRun = args.Contains("--pin-intro-posts-dry-run");
 var postBirdNow    = args.Contains("--post-bird-now");
 var postApodNow    = args.Contains("--post-apod-now");
 
@@ -11,6 +13,24 @@ if (createPackMode)
 {
     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
     await StarterPackSync.SyncAllAsync(Console.WriteLine, cts.Token);
+    return;
+}
+
+// One-shot mode: post + pin a "Live Wire" intro post on each roster account, then exit.
+// Run --create-starter-pack first so each account already has its own pack to link to.
+if (pinIntroMode)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+    await PinnedIntroPostSync.PinAllAsync(Console.WriteLine, cts.Token);
+    return;
+}
+
+// Read-only preview: auth + look up each account's starter pack link, print the
+// exact intro post text that --pin-intro-posts would send — no post, no pin.
+if (pinIntroDryRun)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+    await PinnedIntroPostSync.PinAllAsync(Console.WriteLine, cts.Token, dryRun: true);
     return;
 }
 

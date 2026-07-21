@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace GdeltSearchUI;
 
@@ -61,9 +62,7 @@ internal sealed class BlueskyPoster : IDisposable
         var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
         if (authError is not null) return (false, authError);
 
-        var si = new System.Globalization.StringInfo(text);
-        if (si.LengthInTextElements > MaxPostChars)
-            text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
+        text = TruncateToFit(text);
 
         // 1. Upload image as a blob.
         using var blobReq = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.uploadBlob")
@@ -132,9 +131,7 @@ internal sealed class BlueskyPoster : IDisposable
         var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
         if (authError is not null) return (false, authError);
 
-        var si = new System.Globalization.StringInfo(text);
-        if (si.LengthInTextElements > MaxPostChars)
-            text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
+        text = TruncateToFit(text);
 
         // 1. Upload thumbnail as a blob (best-effort — card still posts without it).
         System.Text.Json.JsonElement? thumbBlob = null;
@@ -209,9 +206,7 @@ internal sealed class BlueskyPoster : IDisposable
         var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
         if (authError is not null) return (false, authError);
 
-        var si = new System.Globalization.StringInfo(text);
-        if (si.LengthInTextElements > MaxPostChars)
-            text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
+        text = TruncateToFit(text);
 
         using var postResp = await SendWithRetryAsync(() =>
         {
@@ -250,9 +245,7 @@ internal sealed class BlueskyPoster : IDisposable
         var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
         if (authError is not null) return (false, authError);
 
-        var si = new System.Globalization.StringInfo(text);
-        if (si.LengthInTextElements > MaxPostChars)
-            text = si.SubstringByTextElements(0, MaxPostChars - 1) + "…";
+        text = TruncateToFit(text);
 
         var facets = BuildMixedFacetsJson(text, linkUrl);
 
@@ -370,6 +363,32 @@ internal sealed class BlueskyPoster : IDisposable
         var session = await resp.Content.ReadFromJsonAsync<SessionResponse>(cancellationToken: ct)
             ?? throw new InvalidOperationException("Empty session response.");
         return (session, null);
+    }
+
+    private static readonly Regex TrailingHashtagLine = new(@"\n\n#\S+(?:\s#\S+)*$", RegexOptions.Compiled);
+
+    // Truncates text to MaxPostChars. Widget post-text builders append hashtags as a
+    // trailing "\n\n#tag1 #tag2" line, so naively cutting from the end silently drops
+    // them on long posts — this pulls that line off first, truncates the remaining
+    // body, then reattaches it so hashtags always survive.
+    private static string TruncateToFit(string text)
+    {
+        var si = new System.Globalization.StringInfo(text);
+        if (si.LengthInTextElements <= MaxPostChars) return text;
+
+        var tagMatch = TrailingHashtagLine.Match(text);
+        var tagLine  = tagMatch.Success ? tagMatch.Value : "";
+        var body     = tagLine.Length > 0 ? text[..^tagLine.Length] : text;
+
+        var tagLineLen = new System.Globalization.StringInfo(tagLine).LengthInTextElements;
+        var budget     = Math.Max(0, MaxPostChars - tagLineLen - 1); // -1 for ellipsis
+
+        var bodyInfo       = new System.Globalization.StringInfo(body);
+        var truncatedBody  = bodyInfo.LengthInTextElements > budget
+            ? bodyInfo.SubstringByTextElements(0, budget) + "…"
+            : body;
+
+        return truncatedBody + tagLine;
     }
 
     private static List<TagFacet> BuildHashtagFacets(string text)

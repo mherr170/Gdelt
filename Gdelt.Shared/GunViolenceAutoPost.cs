@@ -19,23 +19,41 @@ internal static class GunViolenceAutoPost
     // it's filling gaps left by earlier rate-limited cycles, not this cycle's news.
     private const int GNewsLookbackH = 24;
 
+    // RSS has no publication lag, so it uses the same window as GDELT rather than
+    // GNews's widened one. Tried both as a fallback (ahead of GNews, when GDELT is
+    // rate-limited) and as a supplement merged into a successful GDELT result, to
+    // catch outlets/stories GDELT's own index missed this cycle.
+    private const int RssLookbackH = 6;
+
+    // CNN's public RSS feeds (rss.cnn.com, cnn.com/rss/edition_us.rss) are dead —
+    // stale since 2024 and 2012 respectively — so they're left out here.
+    private static readonly string[] RssFeeds =
+    [
+        "https://www.cbsnews.com/latest/rss/crime",
+        "https://www.cbsnews.com/latest/rss/us",
+        "https://abcnews.go.com/abcnews/usheadlines",
+        "https://feeds.nbcnews.com/nbcnews/public/news",
+        "https://feeds.npr.org/1003/rss.xml",
+    ];
+
     // 429 retry: 3 attempts with exponential backoff — total wait ~2 min if all fail.
     private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90)];
 
     private static readonly string[] FatalKeywords =
         ["killed", "dead", "dies", "died", "fatal", "homicide", "murder", "murdered", "slain", "slaying"];
 
-    private static readonly string[] BlockedDomains = ["foxnews.com"];
+    private static readonly string[] BlockedDomains = ["foxnews.com", "breitbart.com"];
 
     public static async Task<GunViolenceAutoPostResult> PostIfNeededAsync(CancellationToken ct = default)
     {
         PostLogger.Info(W, $"Checking GDELT for gun violence articles (past {LookbackH}h)…");
 
         GdeltSearchResult result;
+        bool fetched;
         using (var client = new GdeltApiClient())
         {
             result = null!;
-            var fetched = false;
+            fetched = false;
             var maxAttempts = RetryDelays.Length + 1;
 
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
@@ -75,11 +93,20 @@ internal static class GunViolenceAutoPost
 
             if (!fetched)
             {
-                PostLogger.Warn(W, "Still rate-limited after all retries — trying GNews fallback…");
-                var fallback = await TryGNewsFallbackAsync(ct);
-                if (fallback is null)
-                    return new(GunViolenceAutoPostOutcome.RateLimited);
-                result = fallback;
+                PostLogger.Warn(W, "Still rate-limited after all retries — trying RSS fallback…");
+                var rssFallback = await TryRssFallbackAsync(ct);
+                if (rssFallback is { Articles.Count: > 0 })
+                {
+                    result = rssFallback;
+                }
+                else
+                {
+                    PostLogger.Warn(W, "RSS fallback returned nothing — trying GNews fallback…");
+                    var gnewsFallback = await TryGNewsFallbackAsync(ct);
+                    if (gnewsFallback is null)
+                        return new(GunViolenceAutoPostOutcome.RateLimited);
+                    result = gnewsFallback;
+                }
             }
         }
 
@@ -88,6 +115,27 @@ internal static class GunViolenceAutoPost
             var reason = result.TimedOut ? "request timed out" : result.ErrorMessage ?? "unknown error";
             PostLogger.Error(W, $"GDELT error: {reason}");
             return new(GunViolenceAutoPostOutcome.Failed, ErrorMessage: reason);
+        }
+
+        // Supplement: merge in RSS coverage alongside a successful GDELT result —
+        // catches outlets/stories GDELT's own index missed this cycle. Skipped when
+        // `result` already came from the RSS/GNews fallback path above.
+        if (fetched)
+        {
+            var supplement = await TryRssFallbackAsync(ct);
+            if (supplement is { Articles.Count: > 0 })
+            {
+                var before = result.Articles.Count;
+                result = result with
+                {
+                    Articles = result.Articles
+                        .Concat(supplement.Articles)
+                        .GroupBy(a => a.Url)
+                        .Select(g => g.First())
+                        .ToList(),
+                };
+                PostLogger.Info(W, $"RSS supplement added {result.Articles.Count - before} article(s) (total {result.Articles.Count})");
+            }
         }
 
         // Stage 1: source country + keyword filter
@@ -200,6 +248,34 @@ internal static class GunViolenceAutoPost
         }
 
         return new(GunViolenceAutoPostOutcome.Posted, posted);
+    }
+
+    // Returns a GdeltSearchResult (possibly with an empty Articles list) on success,
+    // or null if the fetch itself failed. No API key, no rate limit — callers treat
+    // an empty result the same as "unavailable this cycle" and fall through further.
+    private static async Task<GdeltSearchResult?> TryRssFallbackAsync(CancellationToken ct)
+    {
+        using var rss = new RssApiClient();
+        RssSearchResult result;
+        try
+        {
+            result = await rss.FetchAsync(RssFeeds, "United States", RssLookbackH, ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            PostLogger.Error(W, $"RSS fallback failed: {ex.Message}");
+            return null;
+        }
+
+        if (!result.IsSuccess)
+        {
+            PostLogger.Warn(W, $"RSS fallback unavailable: {result.ErrorMessage}");
+            return null;
+        }
+
+        PostLogger.Info(W, $"RSS returned {result.Articles.Count} article(s).");
+        return new GdeltSearchResult { Articles = result.Articles };
     }
 
     // Returns a GdeltSearchResult to fall into the normal pipeline on success, or
