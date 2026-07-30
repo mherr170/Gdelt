@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GDELT Live Activity</title>
+<style>
+  :root {
+    --bg: #05060f;
+    --surface: rgba(24, 26, 51, 0.55);
+    --raised: rgba(38, 41, 76, 0.65);
+    --input: rgba(54, 58, 102, 0.75);
+    --text: #e7e9ff;
+    --text-muted: #8d92c4;
+    --accent: #5b8cff;
+    --accent2: #9b6bff;
+    --pos: #4fe3c9;
+    --neg: #ff5f8f;
+    --warn: #ffcf6b;
+    --border: rgba(140, 150, 220, 0.22);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: 'Segoe UI', -apple-system, sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+  }
+  body {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, #10133a 0%, transparent 60%),
+      radial-gradient(ellipse 100% 60% at 50% 100%, #0d0f2e 0%, transparent 55%),
+      linear-gradient(180deg, #030412 0%, #05061a 50%, #02030a 100%);
+  }
+  /* starfield */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+      radial-gradient(1.6px 1.6px at 12% 18%, #fff, transparent 60%),
+      radial-gradient(1.2px 1.2px at 32% 62%, #cdd4ff, transparent 60%),
+      radial-gradient(1.8px 1.8px at 58% 28%, #fff, transparent 60%),
+      radial-gradient(1.2px 1.2px at 74% 74%, #b9c2ff, transparent 60%),
+      radial-gradient(1.4px 1.4px at 86% 15%, #fff, transparent 60%),
+      radial-gradient(1.1px 1.1px at 5% 85%, #cdd4ff, transparent 60%),
+      radial-gradient(1.6px 1.6px at 44% 92%, #fff, transparent 60%),
+      radial-gradient(1.2px 1.2px at 95% 45%, #b9c2ff, transparent 60%),
+      radial-gradient(1.3px 1.3px at 22% 40%, #fff, transparent 60%),
+      radial-gradient(1.1px 1.1px at 66% 8%, #cdd4ff, transparent 60%);
+    background-repeat: repeat;
+    background-size: 420px 420px;
+    opacity: 0.55;
+    animation: twinkle 6s ease-in-out infinite alternate;
+  }
+  @keyframes twinkle { from { opacity: 0.35; } to { opacity: 0.65; } }
+  /* aurora / wave glow, anchored to the bottom of the viewport */
+  .bg-waves {
+    position: fixed; left: -15%; right: -15%; bottom: -8%; height: 50vh;
+    z-index: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 55% 65% at 18% 100%, rgba(91,140,255,0.48), transparent 68%),
+      radial-gradient(ellipse 50% 60% at 50% 100%, rgba(155,107,255,0.42), transparent 68%),
+      radial-gradient(ellipse 48% 55% at 82% 100%, rgba(79,227,201,0.28), transparent 68%);
+    filter: blur(45px);
+    animation: drift 16s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    from { transform: translateX(-3%) translateY(0); }
+    to   { transform: translateX(3%) translateY(-3%); }
+  }
+
+  #app { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100vh; }
+
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px;
+    background: var(--surface);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 15px; font-weight: 600; margin: 0;
+    letter-spacing: 0.3px;
+    background: linear-gradient(90deg, #ecefff, var(--accent) 70%, var(--accent2));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  header h1 span { color: var(--text-muted); font-weight: 400; -webkit-text-fill-color: var(--text-muted); }
+
+  .status {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-muted);
+    margin-left: auto;
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--neg);
+    box-shadow: 0 0 0 0 rgba(255,95,143,0.5);
+  }
+  .dot.live {
+    background: var(--pos);
+    box-shadow: 0 0 8px 1px rgba(79,227,201,0.8);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(79,227,201,0.5); }
+    70%  { box-shadow: 0 0 0 7px rgba(79,227,201,0); }
+    100% { box-shadow: 0 0 0 0 rgba(79,227,201,0); }
+  }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    padding: 10px 20px;
+    background: var(--surface);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .chip {
+    padding: 4px 10px; border-radius: 12px;
+    background: var(--raised); color: var(--text-muted);
+    border: 1px solid var(--border);
+    cursor: pointer; user-select: none;
+    font-size: 12px; white-space: nowrap;
+    transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .chip:hover { background: var(--input); }
+  .chip.active {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #fff; border-color: transparent;
+    box-shadow: 0 0 12px rgba(91,140,255,0.45);
+  }
+  .chip .n { opacity: 0.8; margin-left: 4px; }
+  .toolbar .sep { width: 1px; height: 18px; background: var(--border); margin: 0 4px; }
+  .toolbar .clear-btn {
+    margin-left: auto; padding: 4px 10px; border-radius: 4px;
+    background: transparent; color: var(--text-muted); border: 1px solid var(--border);
+    cursor: pointer; font-size: 12px;
+  }
+  .toolbar .clear-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  #cards {
+    display: flex; gap: 10px; flex-wrap: wrap;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 8px 12px; min-width: 130px;
+    border-left: 3px solid var(--text-muted);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .card .name { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; }
+  .card .msg { font-size: 12px; margin-top: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .ago { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .card.lvl-SUCCESS { border-left-color: var(--pos); box-shadow: -2px 0 10px -4px rgba(79,227,201,0.6); }
+  .card.lvl-WARN    { border-left-color: var(--warn); box-shadow: -2px 0 10px -4px rgba(255,207,107,0.5); }
+  .card.lvl-ERROR   { border-left-color: var(--neg); box-shadow: -2px 0 10px -4px rgba(255,95,143,0.6); }
+  .card.lvl-INFO    { border-left-color: var(--accent); box-shadow: -2px 0 10px -4px rgba(91,140,255,0.5); }
+
+  #log {
+    flex: 1; overflow-y: auto;
+    padding: 4px 0;
+  }
+  .row {
+    display: flex; gap: 10px; align-items: baseline;
+    padding: 3px 20px;
+    font-family: 'Cascadia Code', Consolas, monospace;
+    font-size: 12.5px;
+    border-left: 3px solid transparent;
+    animation: fadein 0.25s ease-out;
+  }
+  .row:hover { background: rgba(140,150,220,0.06); }
+  .row.lvl-SUCCESS { border-left-color: var(--pos); }
+  .row.lvl-WARN    { border-left-color: var(--warn); }
+  .row.lvl-ERROR   { border-left-color: var(--neg); background: rgba(255,95,143,0.06); }
+  @keyframes fadein { from { opacity: 0; background: rgba(91,140,255,0.18); } to { opacity: 1; } }
+
+  .row .ts { color: var(--text-muted); flex-shrink: 0; width: 78px; }
+  .row .widget {
+    flex-shrink: 0; width: 92px; text-transform: uppercase; font-size: 11px;
+    color: #b6bce8; letter-spacing: 0.3px;
+  }
+  .row .lvl { flex-shrink: 0; width: 62px; font-size: 11px; font-weight: 600; }
+  .row.lvl-SUCCESS .lvl { color: var(--pos); }
+  .row.lvl-WARN    .lvl { color: var(--warn); }
+  .row.lvl-ERROR   .lvl { color: var(--neg); }
+  .row.lvl-INFO    .lvl { color: var(--text-muted); }
+  .row .msg { color: var(--text); overflow-wrap: anywhere; }
+
+  #empty {
+    padding: 40px; text-align: center; color: var(--text-muted);
+  }
+
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--raised); border-radius: 5px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--input); }
+</style>
+</head>
+<body>
+<div class="bg-waves"></div>
+<div id="app">
+  <header>
+    <h1>GDELT Auto Post <span>— Live Activity</span></h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting…</span></div>
+  </header>
+
+  <div id="cards"></div>
+
+  <div class="toolbar">
+    <div class="chip active" data-widget="*">All<span class="n" id="count-all">0</span></div>
+    <div class="sep"></div>
+    <div class="chip active" data-level="INFO">INFO</div>
+    <div class="chip active" data-level="SUCCESS">SUCCESS</div>
+    <div class="chip active" data-level="WARN">WARN</div>
+    <div class="chip active" data-level="ERROR">ERROR</div>
+    <button class="clear-btn" id="clearBtn">Clear</button>
+  </div>
+
+  <div id="log"><div id="empty">Waiting for activity…</div></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

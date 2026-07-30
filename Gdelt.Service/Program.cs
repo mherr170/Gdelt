@@ -1,3 +1,4 @@
+using Gdelt.Service;
 using Gdelt.Service.Workers;
 using GdeltSearchUI;
 
@@ -60,10 +61,13 @@ if (postBirdNow)
     return;
 }
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddWindowsService(options =>
     options.ServiceName = "Gdelt Auto Post");
+
+// Dashboard listens on loopback only — this is an operator view, not a public API.
+builder.WebHost.UseUrls("http://127.0.0.1:5080");
 
 builder.Services.AddHostedService<GasAutoPostWorker>();
 builder.Services.AddHostedService<DebtAutoPostWorker>();
@@ -78,6 +82,10 @@ builder.Services.AddHostedService<BlueskyGrowthWorker>();
 builder.Services.AddHostedService<BirdAutoPostWorker>();
 
 var host = builder.Build();
+
+host.UseDefaultFiles();
+host.UseStaticFiles();
+LiveActivityEndpoints.Map(host);
 
 if (runOnce)
 {

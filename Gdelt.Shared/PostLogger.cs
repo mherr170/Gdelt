@@ -27,6 +27,8 @@ internal static class PostLogger
             File.AppendAllText(path, line + Environment.NewLine);
         }
         catch { /* never crash on a log write */ }
+
+        LiveActivityBroadcaster.Publish(widget, level.Trim(), message);
     }
 
     public static void Clear(string widget)
