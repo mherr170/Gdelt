@@ -27,6 +27,10 @@ internal static class GunViolenceAutoPost
 
     // CNN's public RSS feeds (rss.cnn.com, cnn.com/rss/edition_us.rss) are dead —
     // stale since 2024 and 2012 respectively — so they're left out here.
+    //
+    // GDELT direct fetches 429 on ~80% of cycles (see RetryDelays below), so this
+    // list is the de facto primary source most cycles, not just an occasional
+    // fallback — kept wide accordingly.
     private static readonly string[] RssFeeds =
     [
         "https://www.cbsnews.com/latest/rss/crime",
@@ -34,10 +38,16 @@ internal static class GunViolenceAutoPost
         "https://abcnews.go.com/abcnews/usheadlines",
         "https://feeds.nbcnews.com/nbcnews/public/news",
         "https://feeds.npr.org/1003/rss.xml",
+        "https://rssfeeds.usatoday.com/usatoday-NewsTopStories",
+        "https://rss.nytimes.com/services/xml/rss/nyt/US.xml",
+        "https://www.theguardian.com/us-news/rss",
     ];
 
-    // 429 retry: 3 attempts with exponential backoff — total wait ~2 min if all fail.
-    private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90)];
+    // 429 retry: single 30s retry, then fall back to RSS. GDELT's public endpoint
+    // 429s on the first attempt ~80% of the time, and a second retry after 90s
+    // almost never recovers it — so that second wait was pure delay before the
+    // RSS fallback that ends up serving the cycle anyway.
+    private static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(30)];
 
     private static readonly string[] FatalKeywords =
         ["killed", "dead", "dies", "died", "fatal", "homicide", "murder", "murdered", "slain", "slaying"];
