@@ -143,6 +143,14 @@ internal static class CredentialManager
     public static (string Handle, string Password)? LoadBirdBluesky() =>
         SecretStore.Load("BirdBluesky") is { } t ? (t.Username, t.Password) : null;
 
+    // ── Pigs Gonna Blow Bluesky (growth-only, ungrouped) ─────────────────────
+
+    public static void SavePigsBluesky(string handle, string password) =>
+        SecretStore.Save("PigsBluesky", handle, password);
+
+    public static (string Handle, string Password)? LoadPigsBluesky() =>
+        SecretStore.Load("PigsBluesky") is { } t ? (t.Username, t.Password) : null;
+
     // ── YouTube Data API Key ──────────────────────────────────────────────────
 
     public static void SaveYouTubeApiKey(string apiKey) =>
@@ -175,6 +183,7 @@ internal static class CredentialManager
         TryAdd(list, "Weather",      "weather",      LoadWeatherBluesky());
         TryAdd(list, "Streaming",    "streaming",    LoadStreamingBluesky());
         TryAdd(list, "NJ Birds",     "njbirds",      LoadBirdBluesky());
+        TryAdd(list, "Pigs Gonna Blow", "pigsgonnablow", LoadPigsBluesky());
         return list;
 
         static void TryAdd(List<(string, string, string, string)> l, string label, string slug,

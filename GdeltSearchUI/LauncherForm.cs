@@ -11,6 +11,7 @@ internal sealed class LauncherForm : Form
     private Button _weatherBtn       = null!;
     private Button _blueskyMetricsBtn = null!;
     private Button _streamingBtn      = null!;
+    private Button _pigsBtn           = null!;
 
     private Label _debtStat          = null!;
     private Label _gasStat           = null!;
@@ -23,6 +24,7 @@ internal sealed class LauncherForm : Form
     private Label _gunViolenceStat   = null!;
     private Label _blueskyMetricsStat = null!;
     private Label _streamingStat      = null!;
+    private Label _pigsStat           = null!;
     private Label _birdStat           = null!;
     private Label _starterPackStat    = null!;
 
@@ -31,7 +33,7 @@ internal sealed class LauncherForm : Form
     public LauncherForm()
     {
         Text            = "GDELT Dashboard";
-        Size            = new Size(540, 616);
+        Size            = new Size(540, 654);
         MinimumSize     = new Size(400, 220);
         StartPosition   = FormStartPosition.CenterScreen;
         Font            = new Font("Segoe UI", 9.5f);
@@ -62,6 +64,7 @@ internal sealed class LauncherForm : Form
         RefreshGunViolenceStatus();
         RefreshBlueskyMetricsStatus();
         RefreshStreamingStatus();
+        RefreshPigsStatus();
         RefreshBirdStatus();
     }
 
@@ -79,6 +82,13 @@ internal sealed class LauncherForm : Form
         var hasCred = CredentialManager.LoadStreamingBluesky() is not null;
         _streamingStat.Text      = hasCred ? "✓ Account configured — growth only" : "⚠ No Bluesky account configured";
         _streamingStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshPigsStatus()
+    {
+        var hasCred = CredentialManager.LoadPigsBluesky() is not null;
+        _pigsStat.Text      = hasCred ? "✓ Account configured — growth only" : "⚠ No Bluesky account configured";
+        _pigsStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
     }
 
     private void RefreshBirdStatus()
@@ -217,14 +227,14 @@ internal sealed class LauncherForm : Form
         {
             Dock        = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount    = 13,
+            RowCount    = 14,
             Padding     = new Padding(12, 8, 12, 12),
             BackColor   = DarkTheme.Background,
         };
 
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 13; i++)
+        for (int i = 0; i < 14; i++)
             table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         table.Controls.Add(MakeGunViolenceButton(), 0, 0);
@@ -271,13 +281,17 @@ internal sealed class LauncherForm : Form
         _streamingStat = MakeStatLabel("");
         table.Controls.Add(_streamingStat, 1, 10);
 
-        table.Controls.Add(MakeBirdButton(), 0, 11);
-        _birdStat = MakeStatLabel("");
-        table.Controls.Add(_birdStat, 1, 11);
+        table.Controls.Add(MakePigsButton(), 0, 11);
+        _pigsStat = MakeStatLabel("");
+        table.Controls.Add(_pigsStat, 1, 11);
 
-        table.Controls.Add(MakeStarterPackButton(), 0, 12);
+        table.Controls.Add(MakeBirdButton(), 0, 12);
+        _birdStat = MakeStatLabel("");
+        table.Controls.Add(_birdStat, 1, 12);
+
+        table.Controls.Add(MakeStarterPackButton(), 0, 13);
         _starterPackStat = MakeStatLabel("");
-        table.Controls.Add(_starterPackStat, 1, 12);
+        table.Controls.Add(_starterPackStat, 1, 13);
 
         return table;
     }
@@ -517,6 +531,21 @@ internal sealed class LauncherForm : Form
                 RefreshStreamingStatus();
         };
         return _streamingBtn;
+    }
+
+    private Button MakePigsButton()
+    {
+        _pigsBtn = MakeButton("Pigs Gonna Blow", Color.FromArgb(0x8A, 0x3A, 0x5A));
+        _pigsBtn.Click += (_, _) =>
+        {
+            using var dlg = new SettingsDialog(
+                CredentialManager.LoadPigsBluesky,
+                CredentialManager.SavePigsBluesky,
+                "Bluesky Account — Pigs Gonna Blow");
+            if (dlg.ShowDialog() == DialogResult.OK)
+                RefreshPigsStatus();
+        };
+        return _pigsBtn;
     }
 
     private Button _birdBtn = null!;

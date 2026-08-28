@@ -19,6 +19,9 @@ internal static class BlueskyTopicLikeAutoPost
             ["weather"]     = "severe weather tornado hurricane",
             ["streaming"]   = "streaming shows movies TV",
             ["njbirds"]     = "backyard birds birdwatching",
+            // Pipe-separated: each segment is searched independently and the daily
+            // like budget is shared across them (see RunAsync).
+            ["pigsgonnablow"] = "video games|games|pigs|cheeseburger|dragon|retro games",
         };
 
     public static async Task RunAsync(
@@ -31,35 +34,44 @@ internal static class BlueskyTopicLikeAutoPost
             return;
         }
 
-        PostLogger.Info(W, $"  [likes] Searching top posts for \"{topic}\"…");
-
-        List<BskyPost> posts;
-        try { posts = await client.SearchPostsAsync(topic, jwt, limit: 50, ct); }
-        catch (Exception ex) { PostLogger.Error(W, $"  [likes] Search failed: {ex.Message}"); return; }
-
-        var candidates = posts
-            .Where(p => !string.IsNullOrEmpty(p.Uri) && !string.IsNullOrEmpty(p.Cid))
-            .Where(p => p.Author.Did != did)                        // skip own posts
-            .Where(p => !BlueskyLikeTracker.HasLiked(slug, p.Uri))
-            .ToList();
-
-        PostLogger.Info(W, $"  [likes] {posts.Count} post(s) returned — {candidates.Count} not yet liked");
-        if (candidates.Count == 0) return;
+        // A topic may be several pipe-separated search queries; they share one
+        // daily like budget rather than each getting the full limit.
+        var queries = topic.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         int liked = 0;
-        foreach (var post in candidates)
+        foreach (var query in queries)
         {
             if (liked >= limit) break;
             ct.ThrowIfCancellationRequested();
 
-            var (ok, alreadyLiked, error) = await client.LikeAsync(did, post.Uri, post.Cid, jwt, ct);
-            if (alreadyLiked) { BlueskyLikeTracker.MarkLiked(slug, post.Uri); continue; }
-            if (!ok) { PostLogger.Warn(W, $"  [likes] Failed: {error}"); continue; }
+            PostLogger.Info(W, $"  [likes] Searching top posts for \"{query}\"…");
 
-            BlueskyLikeTracker.MarkLiked(slug, post.Uri);
-            liked++;
-            PostLogger.Success(W, $"  [likes] Liked @{post.Author.Handle}: \"{Truncate(post.Record.Text, 60)}\" ({liked}/{limit})");
-            if (liked < limit) await Task.Delay(500, ct);
+            List<BskyPost> posts;
+            try { posts = await client.SearchPostsAsync(query, jwt, limit: 50, ct); }
+            catch (Exception ex) { PostLogger.Error(W, $"  [likes] Search failed for \"{query}\": {ex.Message}"); continue; }
+
+            var candidates = posts
+                .Where(p => !string.IsNullOrEmpty(p.Uri) && !string.IsNullOrEmpty(p.Cid))
+                .Where(p => p.Author.Did != did)                        // skip own posts
+                .Where(p => !BlueskyLikeTracker.HasLiked(slug, p.Uri))
+                .ToList();
+
+            PostLogger.Info(W, $"  [likes] {posts.Count} post(s) returned — {candidates.Count} not yet liked");
+
+            foreach (var post in candidates)
+            {
+                if (liked >= limit) break;
+                ct.ThrowIfCancellationRequested();
+
+                var (ok, alreadyLiked, error) = await client.LikeAsync(did, post.Uri, post.Cid, jwt, ct);
+                if (alreadyLiked) { BlueskyLikeTracker.MarkLiked(slug, post.Uri); continue; }
+                if (!ok) { PostLogger.Warn(W, $"  [likes] Failed: {error}"); continue; }
+
+                BlueskyLikeTracker.MarkLiked(slug, post.Uri);
+                liked++;
+                PostLogger.Success(W, $"  [likes] Liked @{post.Author.Handle}: \"{Truncate(post.Record.Text, 60)}\" ({liked}/{limit})");
+                if (liked < limit) await Task.Delay(500, ct);
+            }
         }
 
         PostLogger.Info(W, $"  [likes] {liked} new like(s)");
