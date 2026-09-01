@@ -167,29 +167,22 @@ internal static class CredentialManager
     public static string? LoadGNewsApiKey() =>
         SecretStore.Load("GNewsApiKey")?.Password;
 
-    // ── All bot accounts (for growth worker) ─────────────────────────────────
-    public static IReadOnlyList<(string Label, string Slug, string Handle, string Password)> LoadAllBlueskyAccounts()
-    {
-        var list = new List<(string, string, string, string)>();
-        TryAdd(list, "Gas Prices",   "gasprices",   LoadGasPriceBluesky());
-        TryAdd(list, "Quake",        "quake",        LoadQuakeBluesky());
-        TryAdd(list, "Debt",         "debt",         LoadDebtBluesky());
-        TryAdd(list, "Commodity",    "commodity",    LoadCommodityBluesky());
-        TryAdd(list, "Yahoo",        "yahoo",        LoadYahooBluesky());
-        TryAdd(list, "Gun Violence", "gunviolence",  LoadGunViolenceBluesky());
-        TryAdd(list, "Congress",     "congress",     LoadCongressBluesky());
-        TryAdd(list, "APOD",         "apod",         LoadApodBluesky());
-        TryAdd(list, "Stock",        "stock",        LoadStockBluesky());
-        TryAdd(list, "Weather",      "weather",      LoadWeatherBluesky());
-        TryAdd(list, "Streaming",    "streaming",    LoadStreamingBluesky());
-        TryAdd(list, "NJ Birds",     "njbirds",      LoadBirdBluesky());
-        TryAdd(list, "Pigs Gonna Blow", "pigsgonnablow", LoadPigsBluesky());
-        return list;
+    // ── Faith: Daily Bible Verse Bluesky ────────────────────────────────────
 
-        static void TryAdd(List<(string, string, string, string)> l, string label, string slug,
-            (string Handle, string Password)? creds)
-        {
-            if (creds is { } c) l.Add((label, slug, c.Handle, c.Password));
-        }
-    }
+    public static void SaveFaithVerseBluesky(string handle, string password) =>
+        SecretStore.Save("FaithVerseBluesky", handle, password);
+
+    public static (string Handle, string Password)? LoadFaithVerseBluesky() =>
+        SecretStore.Load("FaithVerseBluesky") is { } t ? (t.Username, t.Password) : null;
+
+    // ── Faith: The Bible, In Order (one verse per hour) ─────────────────────
+
+    public static void SaveBibleInOrderBluesky(string handle, string password) =>
+        SecretStore.Save("BibleInOrderBluesky", handle, password);
+
+    public static (string Handle, string Password)? LoadBibleInOrderBluesky() =>
+        SecretStore.Load("BibleInOrderBluesky") is { } t ? (t.Username, t.Password) : null;
+
+    // The growth-worker roster now lives in BotNetworks.GrowthRoster() — every
+    // account across all networks plus the ungrouped ones, defined in one place.
 }

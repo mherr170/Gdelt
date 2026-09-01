@@ -4,48 +4,52 @@ using System.Text.Json.Nodes;
 
 namespace GdeltSearchUI;
 
-// Creates/updates an identical Bluesky starter pack on every bot account in the
-// roster, so that discovering any one bot surfaces a path to all the others.
+// Creates/updates an identical Bluesky starter pack on every bot account in a
+// network, so that discovering any one bot surfaces a path to all the others.
 // A starter pack is two records: an app.bsky.graph.list (purpose=referencelist)
 // holding one app.bsky.graph.listitem per member, plus an app.bsky.graph.starterpack
 // record pointing at that list's AT-URI. Each account creates/owns its own copy.
 public static class StarterPackSync
 {
     private const string BaseUrl = "https://bsky.social/xrpc";
-    private const string PackName = "Live Wire";
-    private const string PackDescription =
-        "Real-time bots tracking gas prices, quakes, gun violence, backyard birds, energy futures, and daily space photos — straight from the data.";
 
-    private static readonly (string Label, Func<(string Handle, string Password)?> Loader)[] Roster =
-    [
-        ("Gas Prices",   CredentialManager.LoadGasPriceBluesky),
-        ("Debt",         CredentialManager.LoadDebtBluesky),
-        ("Energy $",     CredentialManager.LoadYahooBluesky),
-        ("NJ Birds",     CredentialManager.LoadBirdBluesky),
-        ("Quakes",       CredentialManager.LoadQuakeBluesky),
-        ("Gun Violence", CredentialManager.LoadGunViolenceBluesky),
-        ("APOD",         CredentialManager.LoadApodBluesky),
-    ];
-
+    // Syncs the starter pack for every network in BotNetworks.All that has at
+    // least one account. Networks are independent — one failing does not stop
+    // the others.
     public static async Task SyncAllAsync(Action<string> log, CancellationToken ct = default)
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
-        var accounts = new List<(string Label, string Did, string Jwt)>();
-        foreach (var (label, loader) in Roster)
+        foreach (var network in BotNetworks.All)
         {
-            var creds = loader();
-            if (creds is null) { log($"[{label}] No credentials configured — skipped."); continue; }
+            if (network.Accounts.Count == 0)
+            {
+                log($"=== {network.Name}: no accounts configured — skipped. ===");
+                continue;
+            }
+
+            log($"=== {network.Name} ===");
+            await SyncNetworkAsync(http, network, log, ct);
+        }
+    }
+
+    private static async Task SyncNetworkAsync(HttpClient http, BotNetwork network, Action<string> log, CancellationToken ct)
+    {
+        var accounts = new List<(string Label, string Did, string Jwt)>();
+        foreach (var acct in network.Accounts)
+        {
+            var creds = acct.LoadCreds();
+            if (creds is null) { log($"[{acct.Label}] No credentials configured — skipped."); continue; }
 
             var (did, jwt, err) = await AuthenticateAsync(http, creds.Value.Handle, creds.Value.Password, ct);
-            if (err is not null) { log($"[{label}] Auth failed: {err}"); continue; }
+            if (err is not null) { log($"[{acct.Label}] Auth failed: {err}"); continue; }
 
-            accounts.Add((label, did!, jwt!));
+            accounts.Add((acct.Label, did!, jwt!));
         }
 
-        if (accounts.Count == 0) { log("No accounts available — aborting."); return; }
-        if (accounts.Count < Roster.Length)
-            log($"Proceeding with {accounts.Count}/{Roster.Length} accounts — the pack will only list who's available.");
+        if (accounts.Count == 0) { log($"[{network.Name}] No accounts available — aborting."); return; }
+        if (accounts.Count < network.Accounts.Count)
+            log($"[{network.Name}] Proceeding with {accounts.Count}/{network.Accounts.Count} accounts — the pack will only list who's available.");
 
         var memberDids = accounts.Select(a => a.Did).ToList();
 
@@ -53,7 +57,7 @@ public static class StarterPackSync
         {
             try
             {
-                await SyncOneAsync(http, acct.Label, acct.Did, acct.Jwt, memberDids, log, ct);
+                await SyncOneAsync(http, network.Name, network.Description, acct.Label, acct.Did, acct.Jwt, memberDids, log, ct);
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex)
@@ -75,7 +79,8 @@ public static class StarterPackSync
     }
 
     private static async Task SyncOneAsync(
-        HttpClient http, string label, string did, string jwt,
+        HttpClient http, string packName, string packDescription,
+        string label, string did, string jwt,
         List<string> memberDids, Action<string> log, CancellationToken ct)
     {
         var auth = new AuthenticationHeaderValue("Bearer", jwt);
@@ -104,16 +109,16 @@ public static class StarterPackSync
             {
                 ["$type"]       = "app.bsky.graph.list",
                 ["purpose"]     = "app.bsky.graph.defs#referencelist",
-                ["name"]        = PackName,
-                ["description"] = PackDescription,
+                ["name"]        = packName,
+                ["description"] = packDescription,
                 ["createdAt"]   = createdAt,
             }, ct);
 
             await PutRecordAsync(http, auth, did, "app.bsky.graph.starterpack", spRkey, new JsonObject
             {
                 ["$type"]       = "app.bsky.graph.starterpack",
-                ["name"]        = PackName,
-                ["description"] = PackDescription,
+                ["name"]        = packName,
+                ["description"] = packDescription,
                 ["list"]        = listUri,
                 ["createdAt"]   = createdAt,
             }, ct);
@@ -125,8 +130,8 @@ public static class StarterPackSync
             {
                 ["$type"]       = "app.bsky.graph.list",
                 ["purpose"]     = "app.bsky.graph.defs#referencelist",
-                ["name"]        = PackName,
-                ["description"] = PackDescription,
+                ["name"]        = packName,
+                ["description"] = packDescription,
                 ["createdAt"]   = createdAt,
             }, ct);
             listUri = listResp["uri"]!.GetValue<string>();
@@ -134,8 +139,8 @@ public static class StarterPackSync
             await CreateRecordAsync(http, auth, did, "app.bsky.graph.starterpack", new JsonObject
             {
                 ["$type"]       = "app.bsky.graph.starterpack",
-                ["name"]        = PackName,
-                ["description"] = PackDescription,
+                ["name"]        = packName,
+                ["description"] = packDescription,
                 ["list"]        = listUri,
                 ["createdAt"]   = createdAt,
             }, ct);

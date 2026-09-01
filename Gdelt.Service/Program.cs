@@ -8,6 +8,8 @@ var pinIntroMode   = args.Contains("--pin-intro-posts");
 var pinIntroDryRun = args.Contains("--pin-intro-posts-dry-run");
 var postBirdNow    = args.Contains("--post-bird-now");
 var postApodNow    = args.Contains("--post-apod-now");
+var postVerseNow   = args.Contains("--post-verse-now");
+var postNextVerse  = args.Contains("--post-next-verse-now");
 
 // One-shot mode: sync the "Live Wire" Bluesky starter pack across the roster, then exit.
 if (createPackMode)
@@ -41,6 +43,26 @@ if (postApodNow)
     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
     var result = await ApodAutoPost.PostIfNeededAsync(cts.Token);
     Console.WriteLine($"APOD one-shot result: {result.Outcome}{(result.ErrorMessage is null ? "" : $" — {result.ErrorMessage}")}");
+    return;
+}
+
+// One-shot mode: post today's Daily Bible Verse now, then exit.
+if (postVerseNow)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    var result = await FaithVerseAutoPost.PostIfNeededAsync(cts.Token);
+    Console.WriteLine($"Faith verse one-shot: {result.Outcome}{(result.ErrorMessage is null ? "" : $" — {result.ErrorMessage}")}");
+    return;
+}
+
+// One-shot mode: post the next verse of the sequential Bible crawl now, then exit.
+if (postNextVerse)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    var result = await SequentialVerseAutoPost.PostIfNeededAsync(cts.Token);
+    Console.WriteLine($"Bible-in-order one-shot: {result.Outcome}" +
+                      $"{(result.Reference is null ? "" : $" — {result.Reference} ({result.Ordinal}/{BibleBooks.TotalVerses})")}" +
+                      $"{(result.ErrorMessage is null ? "" : $" — {result.ErrorMessage}")}");
     return;
 }
 
@@ -80,6 +102,8 @@ builder.Services.AddHostedService<StockAutoPostWorker>();
 builder.Services.AddHostedService<WeatherAutoPostWorker>();
 builder.Services.AddHostedService<BlueskyGrowthWorker>();
 builder.Services.AddHostedService<BirdAutoPostWorker>();
+builder.Services.AddHostedService<FaithVerseAutoPostWorker>();
+builder.Services.AddHostedService<SequentialVerseAutoPostWorker>();
 
 var host = builder.Build();
 

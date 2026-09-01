@@ -278,6 +278,67 @@ internal sealed class BlueskyPoster : IDisposable
         return (true, null);
     }
 
+    // Posts `parts` as a self-reply thread: parts[0] is the root post, each later
+    // part replies to the one before it. Every part is truncated to fit on its
+    // own. Returns Ok only if all parts posted; a mid-thread failure leaves the
+    // earlier parts up (the caller does not advance, so it will re-post the whole
+    // verse as a fresh thread next hour — a rare, acceptable orphan).
+    public async Task<(bool Ok, string? Error)> PostThreadAsync(
+        string handle, string appPassword, IReadOnlyList<string> parts, CancellationToken ct)
+    {
+        if (parts.Count == 0) return (false, "No content to post.");
+        if (parts.Count == 1) return await PostTextAsync(handle, appPassword, parts[0], ct);
+
+        var (session, authError) = await AuthenticateAsync(handle, appPassword, ct);
+        if (authError is not null) return (false, authError);
+
+        PostStrongRef? root   = null;
+        PostStrongRef? parent = null;
+
+        for (int i = 0; i < parts.Count; i++)
+        {
+            var text  = TruncateToFit(parts[i]);
+            var reply = parent is null ? null : new ReplyRef { Root = root!, Parent = parent };
+
+            using var postResp = await SendWithRetryAsync(() =>
+            {
+                var r = new HttpRequestMessage(HttpMethod.Post, $"{BaseUrl}/com.atproto.repo.createRecord")
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        repo       = session.Did,
+                        collection = "app.bsky.feed.post",
+                        record     = new ThreadPostRecord
+                        {
+                            Text      = text,
+                            CreatedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                            Langs     = ["en"],
+                            Facets    = BuildHashtagFacets(text),
+                            Reply     = reply,
+                        },
+                    }),
+                };
+                r.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessJwt);
+                return r;
+            }, ct);
+
+            if (!postResp.IsSuccessStatusCode)
+            {
+                var body = await postResp.Content.ReadAsStringAsync(ct);
+                return (false, $"Thread part {i + 1}/{parts.Count} failed ({(int)postResp.StatusCode}):\n{body}");
+            }
+
+            var created = await postResp.Content.ReadFromJsonAsync<CreateRecordResponse>(cancellationToken: ct);
+            if (created is null || string.IsNullOrEmpty(created.Uri) || string.IsNullOrEmpty(created.Cid))
+                return (false, $"Thread part {i + 1}: empty createRecord response.");
+
+            parent = new PostStrongRef { Uri = created.Uri, Cid = created.Cid };
+            root ??= parent;
+        }
+
+        return (true, null);
+    }
+
     // Builds a JsonArray of facets (link + hashtags) without relying on STJ runtime-type
     // resolution, which does not serialize List<object> feature elements correctly.
     private static JsonArray BuildMixedFacetsJson(string text, string? linkUrl)
@@ -584,5 +645,38 @@ internal sealed class BlueskyPoster : IDisposable
     private sealed class UploadBlobResponse
     {
         [JsonPropertyName("blob")] public System.Text.Json.JsonElement Blob { get; init; }
+    }
+
+    // ── Thread (self-reply) models ───────────────────────────────────────────
+
+    private sealed class ThreadPostRecord
+    {
+        [JsonPropertyName("$type")]     public string         Type      { get; init; } = "app.bsky.feed.post";
+        [JsonPropertyName("text")]      public string         Text      { get; init; } = "";
+        [JsonPropertyName("createdAt")] public string         CreatedAt { get; init; } = "";
+        [JsonPropertyName("langs")]     public string[]       Langs     { get; init; } = [];
+        [JsonPropertyName("facets")]    public List<TagFacet> Facets    { get; init; } = [];
+
+        [JsonPropertyName("reply")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public ReplyRef? Reply { get; init; }
+    }
+
+    private sealed class ReplyRef
+    {
+        [JsonPropertyName("root")]   public PostStrongRef Root   { get; init; } = new();
+        [JsonPropertyName("parent")] public PostStrongRef Parent { get; init; } = new();
+    }
+
+    private sealed class PostStrongRef
+    {
+        [JsonPropertyName("uri")] public string Uri { get; init; } = "";
+        [JsonPropertyName("cid")] public string Cid { get; init; } = "";
+    }
+
+    private sealed class CreateRecordResponse
+    {
+        [JsonPropertyName("uri")] public string Uri { get; init; } = "";
+        [JsonPropertyName("cid")] public string Cid { get; init; } = "";
     }
 }

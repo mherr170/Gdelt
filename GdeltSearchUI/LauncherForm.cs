@@ -12,6 +12,8 @@ internal sealed class LauncherForm : Form
     private Button _blueskyMetricsBtn = null!;
     private Button _streamingBtn      = null!;
     private Button _pigsBtn           = null!;
+    private Button _verseBtn          = null!;
+    private Button _bibleInOrderBtn   = null!;
 
     private Label _debtStat          = null!;
     private Label _gasStat           = null!;
@@ -25,6 +27,8 @@ internal sealed class LauncherForm : Form
     private Label _blueskyMetricsStat = null!;
     private Label _streamingStat      = null!;
     private Label _pigsStat           = null!;
+    private Label _verseStat          = null!;
+    private Label _bibleInOrderStat   = null!;
     private Label _birdStat           = null!;
     private Label _starterPackStat    = null!;
 
@@ -33,7 +37,7 @@ internal sealed class LauncherForm : Form
     public LauncherForm()
     {
         Text            = "GDELT Dashboard";
-        Size            = new Size(540, 654);
+        Size            = new Size(540, 730);
         MinimumSize     = new Size(400, 220);
         StartPosition   = FormStartPosition.CenterScreen;
         Font            = new Font("Segoe UI", 9.5f);
@@ -65,6 +69,8 @@ internal sealed class LauncherForm : Form
         RefreshBlueskyMetricsStatus();
         RefreshStreamingStatus();
         RefreshPigsStatus();
+        RefreshVerseStatus();
+        RefreshBibleInOrderStatus();
         RefreshBirdStatus();
     }
 
@@ -89,6 +95,35 @@ internal sealed class LauncherForm : Form
         var hasCred = CredentialManager.LoadPigsBluesky() is not null;
         _pigsStat.Text      = hasCred ? "✓ Account configured — growth only" : "⚠ No Bluesky account configured";
         _pigsStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshVerseStatus()
+    {
+        var hasCred = CredentialManager.LoadFaithVerseBluesky() is not null;
+        var postedToday = FaithVersePostTracker.HasBeenPosted(DateTime.Now.ToString("yyyy-MM-dd"));
+        _verseStat.Text = hasCred
+            ? (postedToday ? "✓ Posted today" : "✓ Account configured")
+            : "⚠ No Bluesky account configured";
+        _verseStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshBibleInOrderStatus()
+    {
+        var hasCred = CredentialManager.LoadBibleInOrderBluesky() is not null;
+        if (hasCred)
+        {
+            var p = BibleProgressStore.Load();
+            _bibleInOrderStat.Text = p.Complete
+                ? $"✓ Complete — {p.Ordinal:N0} verses"
+                : p.Ordinal > 0
+                    ? $"✓ {p.CachedBook} {p.CachedChapter} · {p.Ordinal:N0}/{BibleBooks.TotalVerses:N0}"
+                    : "✓ Account configured — not started";
+        }
+        else
+        {
+            _bibleInOrderStat.Text = "⚠ No Bluesky account configured";
+        }
+        _bibleInOrderStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
     }
 
     private void RefreshBirdStatus()
@@ -227,14 +262,14 @@ internal sealed class LauncherForm : Form
         {
             Dock        = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount    = 14,
+            RowCount    = 16,
             Padding     = new Padding(12, 8, 12, 12),
             BackColor   = DarkTheme.Background,
         };
 
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         table.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (int i = 0; i < 14; i++)
+        for (int i = 0; i < 16; i++)
             table.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
 
         table.Controls.Add(MakeGunViolenceButton(), 0, 0);
@@ -289,9 +324,17 @@ internal sealed class LauncherForm : Form
         _birdStat = MakeStatLabel("");
         table.Controls.Add(_birdStat, 1, 12);
 
-        table.Controls.Add(MakeStarterPackButton(), 0, 13);
+        table.Controls.Add(MakeVerseButton(), 0, 13);
+        _verseStat = MakeStatLabel("");
+        table.Controls.Add(_verseStat, 1, 13);
+
+        table.Controls.Add(MakeBibleInOrderButton(), 0, 14);
+        _bibleInOrderStat = MakeStatLabel("");
+        table.Controls.Add(_bibleInOrderStat, 1, 14);
+
+        table.Controls.Add(MakeStarterPackButton(), 0, 15);
         _starterPackStat = MakeStatLabel("");
-        table.Controls.Add(_starterPackStat, 1, 13);
+        table.Controls.Add(_starterPackStat, 1, 15);
 
         return table;
     }
@@ -549,6 +592,36 @@ internal sealed class LauncherForm : Form
     }
 
     private Button _birdBtn = null!;
+
+    private Button MakeVerseButton()
+    {
+        _verseBtn = MakeButton("Daily Verse", Color.FromArgb(0x3A, 0x4A, 0x8A));
+        _verseBtn.Click += (_, _) =>
+        {
+            using var dlg = new SettingsDialog(
+                CredentialManager.LoadFaithVerseBluesky,
+                CredentialManager.SaveFaithVerseBluesky,
+                "Bluesky Account — Daily Bible Verse (Faith)");
+            if (dlg.ShowDialog() == DialogResult.OK)
+                RefreshVerseStatus();
+        };
+        return _verseBtn;
+    }
+
+    private Button MakeBibleInOrderButton()
+    {
+        _bibleInOrderBtn = MakeButton("Bible In Order", Color.FromArgb(0x3A, 0x4A, 0x8A));
+        _bibleInOrderBtn.Click += (_, _) =>
+        {
+            using var dlg = new SettingsDialog(
+                CredentialManager.LoadBibleInOrderBluesky,
+                CredentialManager.SaveBibleInOrderBluesky,
+                "Bluesky Account — The Bible, In Order (Faith)");
+            if (dlg.ShowDialog() == DialogResult.OK)
+                RefreshBibleInOrderStatus();
+        };
+        return _bibleInOrderBtn;
+    }
 
     private Button MakeBirdButton()
     {

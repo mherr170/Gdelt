@@ -50,7 +50,7 @@ internal sealed class BlueskyGrowthWorker : BackgroundService
     {
         _lastRunDate = DateTime.Now;
 
-        var accounts = CredentialManager.LoadAllBlueskyAccounts();
+        var accounts = BotNetworks.GrowthRoster();
         if (accounts.Count == 0)
         {
             PostLogger.Info("growth", "No Bluesky accounts configured — skipping growth run");

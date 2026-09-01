@@ -5,10 +5,10 @@ using System.Text.Json.Nodes;
 
 namespace GdeltSearchUI;
 
-// Posts a one-time intro post on each "Live Wire" bot account linking to that
-// account's own copy of the Live Wire starter pack (see StarterPackSync.cs — run
+// Posts a one-time intro post on each bot account in a network, linking to that
+// account's own copy of the network starter pack (see StarterPackSync.cs — run
 // that first so the pack exists), then pins the post to the account's profile so
-// visitors immediately see a path to the other 6 bots.
+// visitors immediately see a path to the other bots in the network.
 //
 // Pinning is a profile-record field (app.bsky.actor.profile#self.pinnedPost), not
 // part of the post itself, so this reads the existing profile record, overwrites
@@ -18,24 +18,6 @@ public static class PinnedIntroPostSync
 {
     private const string BaseUrl = "https://bsky.social/xrpc";
 
-    private static readonly (string Label, string Blurb, Func<(string Handle, string Password)?> Loader)[] Roster =
-    [
-        ("Gas Prices",   "Automated alerts for US gas prices, updated from EIA data.",
-                          CredentialManager.LoadGasPriceBluesky),
-        ("Debt",         "Daily automated updates on the US national debt, sourced from the Treasury Fiscal Data API.",
-                          CredentialManager.LoadDebtBluesky),
-        ("Energy $",     "Automated snapshots of energy futures — crude oil, natural gas, gasoline, and heating oil — from Yahoo Finance.",
-                          CredentialManager.LoadYahooBluesky),
-        ("NJ Birds",     "Automated highlights from the Backyard Birds of New Jersey YouTube channel.",
-                          CredentialManager.LoadBirdBluesky),
-        ("Quakes",       "Automated alerts for significant earthquakes worldwide, sourced from USGS.",
-                          CredentialManager.LoadQuakeBluesky),
-        ("Gun Violence", "Automated tracking of US gun violence news from GDELT, filtered and LLM-verified before posting.",
-                          CredentialManager.LoadGunViolenceBluesky),
-        ("APOD",         "NASA's Astronomy Picture of the Day, posted automatically every day.",
-                          CredentialManager.LoadApodBluesky),
-    ];
-
     // dryRun: authenticate (needed to read the starter pack) and build the exact
     // post text that would be sent, but stop before createRecord/putRecord — no
     // post, no pin, no tracker write. Purely a read-only preview.
@@ -43,25 +25,33 @@ public static class PinnedIntroPostSync
     {
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
 
-        foreach (var (label, blurb, loader) in Roster)
+        foreach (var network in BotNetworks.All)
         {
-            try
+            if (network.Accounts.Count == 0) continue;
+
+            log($"=== {network.Name} ===");
+            foreach (var acct in network.Accounts)
             {
-                await PinOneAsync(http, label, blurb, loader, log, ct, dryRun);
-            }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex)
-            {
-                log($"[{label}] Failed: {ex.Message}");
+                try
+                {
+                    await PinOneAsync(http, network, acct, log, ct, dryRun);
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    log($"[{acct.Label}] Failed: {ex.Message}");
+                }
             }
         }
     }
 
     private static async Task PinOneAsync(
-        HttpClient http, string label, string blurb,
-        Func<(string Handle, string Password)?> loader, Action<string> log, CancellationToken ct, bool dryRun = false)
+        HttpClient http, BotNetwork network, BotAccount acct,
+        Action<string> log, CancellationToken ct, bool dryRun = false)
     {
-        var creds = loader();
+        var label = acct.Label;
+        var blurb = acct.IntroBlurb;
+        var creds = acct.LoadCreds();
         if (creds is null) { log($"[{label}] No credentials configured — skipped."); return; }
 
         var (did, jwt, err) = await AuthenticateAsync(http, creds.Value.Handle, creds.Value.Password, ct);
@@ -86,13 +76,13 @@ public static class PinnedIntroPostSync
             var pack  = packs.FirstOrDefault();
             if (pack is null)
             {
-                log($"[{label}] No 'Live Wire' starter pack found — run --create-starter-pack first. Skipped.");
+                log($"[{label}] No '{network.Name}' starter pack found — run --create-starter-pack first. Skipped.");
                 return;
             }
 
             var rkey    = RkeyFromUri(pack["uri"]!.GetValue<string>());
             var packUrl = $"https://bsky.app/starter-pack/{creds.Value.Handle}/{rkey}";
-            var text    = $"{blurb}\n\nMeet the rest of the Live Wire network: {packUrl}";
+            var text    = $"{blurb}\n\n{string.Format(network.IntroPromoLine, packUrl)}";
 
             if (dryRun)
             {
