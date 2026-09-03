@@ -64,6 +64,8 @@ public static class BotNetworks
                 "A verse of scripture every morning, from the public-domain World English Bible."),
             new("bibleinorder", "The Bible, In Order", CredentialManager.LoadBibleInOrderBluesky,
                 "The entire Bible, one verse every hour, Genesis to Revelation — World English Bible (public domain)."),
+            new("dailyoffice", "The Daily Office", CredentialManager.LoadDailyOfficeBluesky,
+                "Morning & Evening Prayer twice daily — the appointed psalms, two lessons, and a collect, from the Book of Common Prayer (public domain)."),
         ]);
 
     // Every network. Add new networks here.

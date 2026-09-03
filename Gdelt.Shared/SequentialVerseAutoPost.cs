@@ -126,7 +126,8 @@ internal static class SequentialVerseAutoPost
     // lands on the final post, with "…" markers bridging the parts.
     internal static List<string> BuildParts(string verseText, string reference, int ordinalAfter)
     {
-        var footer = $"— {reference} (WEB)\n\U0001F4D6 {ordinalAfter:N0} / {BibleBooks.TotalVerses:N0}";
+        var footer = $"— {reference} (WEB)\n\U0001F4D6 {ordinalAfter:N0} / {BibleBooks.TotalVerses:N0}" +
+                     "\n\n#Bible #Scripture #Christian";
         var full   = $"{verseText}\n\n{footer}";
 
         if (Graphemes(full) <= MaxPost) return [full];

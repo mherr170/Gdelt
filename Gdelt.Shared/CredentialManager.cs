@@ -183,6 +183,14 @@ internal static class CredentialManager
     public static (string Handle, string Password)? LoadBibleInOrderBluesky() =>
         SecretStore.Load("BibleInOrderBluesky") is { } t ? (t.Username, t.Password) : null;
 
+    // ── Faith: The Daily Office (Morning & Evening Prayer) ──────────────────
+
+    public static void SaveDailyOfficeBluesky(string handle, string password) =>
+        SecretStore.Save("DailyOfficeBluesky", handle, password);
+
+    public static (string Handle, string Password)? LoadDailyOfficeBluesky() =>
+        SecretStore.Load("DailyOfficeBluesky") is { } t ? (t.Username, t.Password) : null;
+
     // The growth-worker roster now lives in BotNetworks.GrowthRoster() — every
     // account across all networks plus the ungrouped ones, defined in one place.
 }

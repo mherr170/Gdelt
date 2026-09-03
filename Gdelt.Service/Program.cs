@@ -10,6 +10,7 @@ var postBirdNow    = args.Contains("--post-bird-now");
 var postApodNow    = args.Contains("--post-apod-now");
 var postVerseNow   = args.Contains("--post-verse-now");
 var postNextVerse  = args.Contains("--post-next-verse-now");
+var postOfficeNow  = args.Contains("--post-office-now");
 
 // One-shot mode: sync the "Live Wire" Bluesky starter pack across the roster, then exit.
 if (createPackMode)
@@ -66,6 +67,19 @@ if (postNextVerse)
     return;
 }
 
+// One-shot mode: post the currently-due Daily Office (Morning before 18:00,
+// otherwise Evening) now, then exit.
+if (postOfficeNow)
+{
+    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+    var office = DateTime.Now.Hour < 18 ? Office.Morning : Office.Evening;
+    var result = await DailyOfficeAutoPost.PostIfNeededAsync(office, cts.Token);
+    Console.WriteLine($"Daily Office one-shot: {result.Outcome} ({result.Office})" +
+                      $"{(result.Summary is null ? "" : $" — {result.Summary}")}" +
+                      $"{(result.ErrorMessage is null ? "" : $" — {result.ErrorMessage}")}");
+    return;
+}
+
 // One-shot mode: post the NJ Birds top videos now, then exit.
 // Picks the most recently elapsed scheduled time so the slot key matches what
 // the running service uses, preventing double-posts or silent no-ops.
@@ -104,6 +118,7 @@ builder.Services.AddHostedService<BlueskyGrowthWorker>();
 builder.Services.AddHostedService<BirdAutoPostWorker>();
 builder.Services.AddHostedService<FaithVerseAutoPostWorker>();
 builder.Services.AddHostedService<SequentialVerseAutoPostWorker>();
+builder.Services.AddHostedService<DailyOfficeAutoPostWorker>();
 
 var host = builder.Build();
 
