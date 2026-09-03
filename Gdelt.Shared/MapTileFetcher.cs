@@ -3,16 +3,21 @@ using SkiaSharp;
 namespace GdeltSearchUI;
 
 /// <summary>
-/// Fetches OpenStreetMap raster tiles. Honors the OSM tile usage policy:
-/// identifies the app via User-Agent and caches results in-memory to avoid
-/// duplicate hits for the same tile.
+/// Fetches dark-themed raster map tiles for the quake context map. Uses Esri's
+/// "Dark Gray Canvas" (base + reference/label layer composited together) — it is
+/// keyless for low-volume use and matches the app's dark palette. Identifies the
+/// app via User-Agent and caches composited tiles in-memory.
 /// </summary>
 internal static class MapTileFetcher
 {
-    // CartoDB "Dark Matter" — OSM-derived tiles with English/Latin-script labels
-    // and a dark palette that matches the app theme. Free for low-volume use;
-    // attribution required (rendered into the image by QuakeMap).
-    private const string TileUrl  = "https://a.basemaps.cartocdn.com/dark_all/{0}/{1}/{2}.png";
+    // Esri ArcGIS Online "Dark Gray Canvas". NOTE: Esri tile URLs are
+    // {z}/{row}/{col} = {z}/{y}/{x}, not the XYZ {z}/{x}/{y} order.
+    // The base is landmass/water only; the reference layer adds place labels
+    // and admin boundaries on a transparent background.
+    private const string BaseUrl =
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{0}/{1}/{2}";
+    private const string ReferenceUrl =
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{0}/{1}/{2}";
     private const string UserAgent = "GdeltSearchUI/1.0 (+https://github.com/mherr170)";
 
     private static readonly HttpClient _http;
@@ -32,19 +37,42 @@ internal static class MapTileFetcher
             if (_cache.TryGetValue((z, x, y), out var cached)) return cached;
         }
 
+        // Esri expects {z}/{y}/{x}.
+        var baseBmp = await FetchAsync(string.Format(BaseUrl, z, y, x), ct);
+        if (baseBmp is null) return null;
+
+        var refBmp = await FetchAsync(string.Format(ReferenceUrl, z, y, x), ct);
+        var composed = refBmp is null ? baseBmp : Compose(baseBmp, refBmp);
+
+        lock (_lock) _cache[(z, x, y)] = composed;
+        return composed;
+    }
+
+    private static async Task<SKBitmap?> FetchAsync(string url, CancellationToken ct)
+    {
         try
         {
-            var url   = string.Format(TileUrl, z, x, y);
             var bytes = await _http.GetByteArrayAsync(url, ct);
-            var bmp   = SKBitmap.Decode(bytes);
-            if (bmp is null) return null;
-
-            lock (_lock) _cache[(z, x, y)] = bmp;
-            return bmp;
+            return SKBitmap.Decode(bytes);
         }
         catch
         {
             return null;
         }
+    }
+
+    // Draw the label/boundary layer over the base tile into a single bitmap.
+    private static SKBitmap Compose(SKBitmap baseBmp, SKBitmap overlay)
+    {
+        var result = new SKBitmap(baseBmp.Width, baseBmp.Height);
+        using (var canvas = new SKCanvas(result))
+        {
+            canvas.DrawBitmap(baseBmp, 0, 0);
+            var dest = new SKRect(0, 0, baseBmp.Width, baseBmp.Height);
+            canvas.DrawBitmap(overlay, dest);
+        }
+        baseBmp.Dispose();
+        overlay.Dispose();
+        return result;
     }
 }

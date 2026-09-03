@@ -148,6 +148,6 @@ internal static class QuakeMap
 
         using var font = new SKFont(SKTypeface.FromFamilyName("Segoe UI"), 10);
         using var paint = new SKPaint { Color = new SKColor(0xDD, 0xDD, 0xDD), IsAntialias = true };
-        canvas.DrawText("© OpenStreetMap contributors © CARTO  ·  Quakes: USGS", 8, h - 5, SKTextAlign.Left, font, paint);
+        canvas.DrawText("Basemap: Esri, © OpenStreetMap contributors  ·  Quakes: USGS", 8, h - 5, SKTextAlign.Left, font, paint);
     }
 }
