@@ -19,6 +19,12 @@ internal sealed class DebtApiClient : IDisposable
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(30) };
 
+    /// <summary>
+    /// Fixed start date for the sparkline history window. The chart shows every
+    /// business-day snapshot from this date to the latest record.
+    /// </summary>
+    public static readonly DateOnly HistoryStart = new(2025, 2, 1);
+
     public async Task<NationalDebt> GetLatestAsync(CancellationToken ct = default)
     {
         HttpResponseMessage response;
@@ -109,6 +115,39 @@ internal sealed class DebtApiClient : IDisposable
             "v2/accounting/od/debt_to_penny" +
             "?fields=record_date,debt_held_public_amt,intragov_hold_amt,tot_pub_debt_out_amt" +
             $"&sort=-record_date&page[size]={days}";
+
+        try
+        {
+            var response = await _http.GetAsync(url, ct);
+            if (!response.IsSuccessStatusCode) return [];
+
+            var json = await response.Content.ReadAsStringAsync(ct);
+            var parsed = JsonSerializer.Deserialize<DebtApiResponse>(json);
+            if (parsed?.Data is null) return [];
+
+            return parsed.Data
+                .Select(ToSnapshot)
+                .Where(s => s is not null)
+                .Select(s => s!)
+                .OrderBy(s => s.RecordDate)
+                .ToList();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch { return []; }
+    }
+
+    /// <summary>
+    /// Fetches every daily snapshot from <paramref name="since"/> to the most
+    /// recent record, oldest-first. Used for the post sparkline.
+    /// </summary>
+    public async Task<List<DebtSnapshot>> GetHistorySinceAsync(DateOnly since, CancellationToken ct = default)
+    {
+        var url =
+            "https://api.fiscaldata.treasury.gov/services/api/fiscal_service/" +
+            "v2/accounting/od/debt_to_penny" +
+            "?fields=record_date,debt_held_public_amt,intragov_hold_amt,tot_pub_debt_out_amt" +
+            $"&filter=record_date:gte:{since:yyyy-MM-dd}" +
+            "&sort=-record_date&page[size]=10000";
 
         try
         {

@@ -52,7 +52,7 @@ internal static class DebtAutoPost
 
         List<DebtSnapshot> history;
         using (var client = new DebtApiClient())
-            history = await client.GetRecentAsync(7, ct);
+            history = await client.GetHistorySinceAsync(DebtApiClient.HistoryStart, ct);
 
         var (headline, tags) = await LmStudioPostGenerator.GenerateDebtPostAsync(data);
         var text = BuildPostText(data, headline, tags);
@@ -129,7 +129,7 @@ internal static class DebtAutoPost
         var max       = history.Max(s => s.TotalPublicDebt) / 1_000_000_000_000m;
 
         return
-            $"Line chart titled \"US National Debt — Last {history.Count} Days\". " +
+            $"Line chart titled \"US National Debt — {first.RecordDate:MMM d, yyyy} to {last.RecordDate:MMM d, yyyy}\". " +
             $"X-axis shows dates from {first.RecordDate:yyyy-MM-dd} to {last.RecordDate:yyyy-MM-dd}. " +
             $"Y-axis shows total public debt in trillions of dollars, ranging from ${min:F3}T to ${max:F3}T. " +
             $"The line is {direction}, starting at ${startT:F3}T and ending at ${endT:F3}T, " +

@@ -23,10 +23,10 @@ internal partial class DebtForm
 
         var (headline, tags) = await LmStudioPostGenerator.GenerateDebtPostAsync(_lastResult);
 
-        SetStatus("Fetching 7-day history for chart…");
+        SetStatus("Fetching debt history for chart…");
         List<DebtSnapshot> history;
         using (var client = new DebtApiClient())
-            history = await client.GetRecentAsync(7);
+            history = await client.GetHistorySinceAsync(DebtApiClient.HistoryStart);
 
         var text = BuildPostText(_lastResult, headline, tags);
         (bool ok, string? error) result;

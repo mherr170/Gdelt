@@ -16,13 +16,18 @@ internal static class DebtSparkline
         var ys = snapshots.Select(s => (double)(s.TotalPublicDebt / 1_000_000_000_000m)).ToArray();
 
         var line = plot.Add.Scatter(xs, ys);
-        line.MarkerStyle.Size = 6;
+        // Per-point dots are useful for a handful of days but turn into noise once
+        // the series spans months — drop them past ~60 points and keep just the line.
+        line.MarkerStyle.Size = snapshots.Count > 60 ? 0 : 6;
         line.LineWidth = 2.5f;
         line.Color = ScottPlot.Color.FromHex("#4FB56E");
 
         plot.Axes.DateTimeTicksBottom();
         plot.YLabel("Total Public Debt ($T)");
-        plot.Title($"US National Debt — Last {snapshots.Count} Days");
+
+        var first = snapshots[0].RecordDate;
+        var last  = snapshots[^1].RecordDate;
+        plot.Title($"US National Debt — {first:MMM d, yyyy} to {last:MMM d, yyyy}");
 
         // Dark theme to match the app
         plot.FigureBackground.Color = ScottPlot.Color.FromHex("#1E1E1E");
