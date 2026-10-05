@@ -119,6 +119,7 @@ builder.Services.AddHostedService<BirdAutoPostWorker>();
 builder.Services.AddHostedService<FaithVerseAutoPostWorker>();
 builder.Services.AddHostedService<SequentialVerseAutoPostWorker>();
 builder.Services.AddHostedService<DailyOfficeAutoPostWorker>();
+builder.Services.AddHostedService<OutbreakAutoPostWorker>();
 
 var host = builder.Build();
 

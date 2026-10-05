@@ -63,15 +63,15 @@ internal static class GasAutoPost
         (bool Ok, string? Error) result;
         using var poster = new BlueskyPoster();
 
-        const int MonthsToShow = 3;
+        var monthsToShow = GasPriceChart.MonthsSince(new DateTime(2025, 2, 1));
         var monthly = GasPriceChart.ComputeMonthlyAverages(data.History);
-        if (monthly.Count > MonthsToShow) monthly = monthly.TakeLast(MonthsToShow).ToList();
+        if (monthly.Count > monthsToShow) monthly = monthly.TakeLast(monthsToShow).ToList();
         if (monthly.Count >= 2)
         {
             byte[] png;
             try
             {
-                png = GasPriceChart.RenderMonthlyAveragesPng(data.History, MonthsToShow);
+                png = GasPriceChart.RenderMonthlyAveragesPng(data.History, monthsToShow);
             }
             catch (Exception ex)
             {

@@ -59,11 +59,11 @@ internal static class BirdAutoPost
         }
 
         PostLogger.Info(W, $"Fetching top {TopN} videos for @{ChannelHandle}…");
-        IReadOnlyList<YouTubeVideo> videos;
+        IReadOnlyList<YouTubeVideo> allVideos;
         try
         {
             using var client = new YouTubeApiClient(apiKey);
-            videos = await client.GetTopVideosByViewCountAsync(ChannelHandle, TopN, ct);
+            allVideos = await client.GetTopVideosByViewCountAsync(ChannelHandle, TopN * 10, ct);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -72,13 +72,25 @@ internal static class BirdAutoPost
             return new(BirdAutoPostOutcome.Failed, slotKey, ErrorMessage: ex.Message);
         }
 
-        if (videos.Count == 0)
+        if (allVideos.Count == 0)
         {
             PostLogger.Warn(W, "No videos returned from YouTube API");
             return new(BirdAutoPostOutcome.NoVideosFound, slotKey);
         }
 
-        PostLogger.Info(W, $"Top {videos.Count} videos: {string.Join(", ", videos.Select(v => $"\"{v.Title}\" ({v.ViewCount:N0} views)"))}");
+        var videos = allVideos
+            .Where(v => !BirdPostTracker.HasVideoBeenPosted(v.VideoId))
+            .Take(TopN)
+            .ToList();
+
+        if (videos.Count == 0)
+        {
+            PostLogger.Info(W, $"All {allVideos.Count} fetched video(s) already posted — skipping slot");
+            BirdPostTracker.MarkPosted(slotKey);
+            return new(BirdAutoPostOutcome.AlreadyPosted, slotKey);
+        }
+
+        PostLogger.Info(W, $"Top {videos.Count} new videos: {string.Join(", ", videos.Select(v => $"\"{v.Title}\" ({v.ViewCount:N0} views)"))}");
 
         int posted = 0;
         using var poster = new BlueskyPoster();
@@ -113,6 +125,7 @@ internal static class BirdAutoPost
 
             if (ok)
             {
+                BirdPostTracker.MarkVideoPosted(video.VideoId);
                 PostLogger.Success(W, $"Posted: \"{video.Title}\" — {video.ViewCount:N0} views");
                 posted++;
             }

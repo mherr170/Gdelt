@@ -26,13 +26,13 @@ internal partial class GasPriceForm
         var text = GasAutoPost.BuildPostText(_lastResult, headline, tags);
         (bool ok, string? error) result;
 
-        const int MonthsToShow = 3;
+        var monthsToShow = GasPriceChart.MonthsSince(new DateTime(2025, 2, 1));
         var monthly = GasPriceChart.ComputeMonthlyAverages(_lastResult.History);
-        if (monthly.Count > MonthsToShow) monthly = monthly.TakeLast(MonthsToShow).ToList();
+        if (monthly.Count > monthsToShow) monthly = monthly.TakeLast(monthsToShow).ToList();
         if (monthly.Count >= 2)
         {
             SetStatus("Rendering monthly-averages chart and posting to Bluesky…");
-            var png = GasPriceChart.RenderMonthlyAveragesPng(_lastResult.History, MonthsToShow);
+            var png = GasPriceChart.RenderMonthlyAveragesPng(_lastResult.History, monthsToShow);
             var alt = GasAutoPost.BuildAltText(monthly);
             result = await _poster.PostTextWithImageAsync(
                 creds.Value.Handle, creds.Value.Password, text, png, alt, CancellationToken.None);

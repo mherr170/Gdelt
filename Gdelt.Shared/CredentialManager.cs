@@ -191,6 +191,14 @@ internal static class CredentialManager
     public static (string Handle, string Password)? LoadDailyOfficeBluesky() =>
         SecretStore.Load("DailyOfficeBluesky") is { } t ? (t.Username, t.Password) : null;
 
+    // ── Outbreak Watch Bluesky ──────────────────────────────────────────────
+
+    public static void SaveOutbreakBluesky(string handle, string password) =>
+        SecretStore.Save("OutbreakBluesky", handle, password);
+
+    public static (string Handle, string Password)? LoadOutbreakBluesky() =>
+        SecretStore.Load("OutbreakBluesky") is { } t ? (t.Username, t.Password) : null;
+
     // The growth-worker roster now lives in BotNetworks.GrowthRoster() — every
     // account across all networks plus the ungrouped ones, defined in one place.
 }

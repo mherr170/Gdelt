@@ -5,6 +5,16 @@ namespace GdeltSearchUI;
 internal static class GasPriceChart
 {
     /// <summary>
+    /// Number of calendar months from <paramref name="start"/> (inclusive) through the current month.
+    /// </summary>
+    public static int MonthsSince(DateTime start)
+    {
+        var now = DateTime.Now;
+        var months = (now.Year - start.Year) * 12 + (now.Month - start.Month) + 1;
+        return Math.Max(months, 1);
+    }
+
+    /// <summary>
     /// Renders a multi-line chart of monthly average pump prices for each
     /// fuel type and returns it as PNG bytes for embedding in a Bluesky post.
     /// </summary>

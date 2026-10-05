@@ -74,11 +74,29 @@ internal sealed class WeatherApiClient : IDisposable
             Onset       = TryParseDate(p.Onset),
             Expires     = TryParseDate(p.Expires),
             Instruction = p.Instruction,
+            TrackingKey = VtecKey(p.Parameters?.Vtec) ?? f.Id!,
         };
     }
 
     private static DateTime? TryParseDate(string? s) =>
         DateTimeOffset.TryParse(s, out var dt) ? dt.LocalDateTime : null;
+
+    // VTEC format: "/k.aaa.CCCC.pp.s.####.start-end/" where k=class, aaa=action
+    // (NEW/CON/EXT/...), CCCC=office, pp=phenomena, s=significance, ####=event
+    // tracking number. The action code and times change on every update to a
+    // warning, but office+phenomena+significance+ETN identifies the same event
+    // throughout its lifetime — that's what we key on to avoid reposting an
+    // update to a warning we've already posted.
+    private static string? VtecKey(string[]? vtec)
+    {
+        var line = vtec?.FirstOrDefault();
+        if (string.IsNullOrEmpty(line)) return null;
+
+        var parts = line.Trim('/').Split('.');
+        if (parts.Length < 6) return null;
+
+        return $"{parts[2]}.{parts[3]}.{parts[4]}.{parts[5]}";
+    }
 
     public void Dispose() => _http.Dispose();
 }

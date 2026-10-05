@@ -30,7 +30,8 @@ internal static class WeatherAutoPost
         }
 
         var candidates = alerts
-            .Where(a => !WeatherPostTracker.HasBeenPosted(a.Id))
+            .Where(a => !WeatherPostTracker.HasBeenPosted(a.TrackingKey))
+            .DistinctBy(a => a.TrackingKey)
             .OrderByDescending(AlertPriority)
             .Take(MaxPerRun)
             .ToList();
@@ -64,7 +65,7 @@ internal static class WeatherAutoPost
 
             if (ok)
             {
-                WeatherPostTracker.MarkPosted(alert.Id);
+                WeatherPostTracker.MarkPosted(alert.TrackingKey);
                 posted++;
                 PostLogger.Success(W, $"Posted: {alert.Event} | {TrimTo(alert.AreaDesc, 60)}");
             }

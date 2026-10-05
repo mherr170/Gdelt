@@ -7,14 +7,20 @@ internal static class BirdPostTracker
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "GdeltAutoPost", "posted_bird.txt");
 
+    private static readonly string _videoFilePath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+        "GdeltAutoPost", "posted_bird_videos.txt");
+
     private static readonly string _tsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
         "GdeltAutoPost", "bird_last_post_ts.txt");
 
-    private static readonly HashSet<string> _posted = PostTrackerStore.Load(_filePath);
+    private static readonly HashSet<string> _posted      = PostTrackerStore.Load(_filePath);
+    private static readonly HashSet<string> _postedVideos = PostTrackerStore.Load(_videoFilePath);
     private static readonly object _lock = new();
 
-    public static bool HasBeenPosted(string slotKey) { lock (_lock) return _posted.Contains(slotKey); }
+    public static bool HasBeenPosted(string slotKey)      { lock (_lock) return _posted.Contains(slotKey); }
+    public static bool HasVideoBeenPosted(string videoId) { lock (_lock) return _postedVideos.Contains(videoId); }
 
     public static DateTime? GetLastPostedAt()
     {
@@ -38,5 +44,11 @@ internal static class BirdPostTracker
 
         lock (_lock) _posted.Add(slotKey);
         PostTrackerStore.Append(_filePath, slotKey);
+    }
+
+    public static void MarkVideoPosted(string videoId)
+    {
+        lock (_lock) _postedVideos.Add(videoId);
+        PostTrackerStore.Append(_videoFilePath, videoId);
     }
 }

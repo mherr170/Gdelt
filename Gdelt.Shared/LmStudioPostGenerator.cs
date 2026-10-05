@@ -193,6 +193,135 @@ internal static class LmStudioPostGenerator
         }
     }
 
+    private const string OutbreakClassifierPrompt =
+        "You classify news headlines for a disease-outbreak tracking account. " +
+        "Reply YES only if the headline reports a specific, current infectious-disease outbreak or a concrete " +
+        "development in one: new cases or deaths, a suspected or confirmed novel pathogen, quarantine or " +
+        "containment measures, an official alert or emergency declaration (WHO, CDC, ECDC, national health agency). " +
+        "Reply NO for everything else: vaccine or drug business news, health policy or funding, chronic disease, " +
+        "research studies without an active outbreak, opinion pieces, routine seasonal flu or COVID statistics, " +
+        "personal health advice, anniversaries or retrospectives, and fiction. " +
+        "Reply with EXACTLY one word: YES or NO.";
+
+    private const string OutbreakDedupePrompt =
+        "You deduplicate news headlines about disease outbreaks. " +
+        "Two headlines are duplicates when they report the SAME development of the SAME outbreak " +
+        "(same disease, place, and event). A new death toll, a new country, or an official confirmation " +
+        "is a DIFFERENT development. Given a numbered list, return ONLY the line numbers to KEEP — " +
+        "one per unique development, choosing the most descriptive headline. " +
+        "Output one integer per line, nothing else.";
+
+    private const string OutbreakRecentDuplicatePrompt =
+        "You check whether a NEW outbreak headline reports the SAME development as any headline already " +
+        "posted (same disease, place, and event), even if worded differently by another outlet. " +
+        "A new death toll, new country, new case count, or official confirmation is a DIFFERENT development. " +
+        "Reply YES if it matches an already-posted headline, otherwise NO. Reply with EXACTLY one word: YES or NO.";
+
+    private const string OutbreakPostPrompt =
+        "You write neutral, factual Bluesky posts for an outbreak-tracking account. " +
+        "Given a news headline, reply with EXACTLY these two lines and nothing else:\n\n" +
+        "HEADLINE: <one calm sentence, max 200 chars, no emojis, no source attribution>\n" +
+        "TAGS: <tag1>, <tag2>, <tag3>\n\n" +
+        "CRITICAL: Preserve the headline's certainty exactly. If it says suspected, possible, reported, or " +
+        "unconfirmed, keep that hedge. Never upgrade a suspicion to a confirmation, never add facts not in the " +
+        "headline, and never use alarmist words like deadly, terrifying, or Covid-style. " +
+        "If an official body denied or has not confirmed something, say so.\n\n" +
+        "Example input: Russia: 189 people under observation after lab worker dies of possible pneumonic plague\n" +
+        "Example output:\n" +
+        "HEADLINE: 189 people under observation in Russia after a lab worker's death, possibly from pneumonic plague (unconfirmed)\n" +
+        "TAGS: Outbreak, Plague, Russia\n\n" +
+        "Tag rules: first tag = Outbreak; then the disease and the country or region; " +
+        "acronyms uppercase (WHO, CDC); PascalCase for multi-word tags; never use generic words like News, Breaking, Update.";
+
+    public static async Task<bool> IsOutbreakNewsAsync(string headline, CancellationToken ct = default)
+    {
+        try
+        {
+            var response = await LmStudioClient.CallAsync(OutbreakClassifierPrompt, headline, 8, 0.0, ct);
+            return response.Trim().StartsWith("YES", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // Fail closed: an unverified health scare is worse than a missed post.
+            return false;
+        }
+    }
+
+    public static async Task<bool> IsDuplicateOutbreakAsync(
+        string candidateTitle, IReadOnlyList<string> recentPostedTitles, CancellationToken ct = default)
+    {
+        if (recentPostedTitles.Count == 0) return false;
+
+        var userMessage = $"NEW: {candidateTitle}\n\nALREADY POSTED:\n" +
+            string.Join("\n", recentPostedTitles.Select((t, i) => $"{i + 1}. {t}"));
+
+        try
+        {
+            var response = await LmStudioClient.CallAsync(OutbreakRecentDuplicatePrompt, userMessage, 8, 0.0, ct);
+            return response.Trim().StartsWith("YES", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false; // lexical filter has already run
+        }
+    }
+
+    public static async Task<List<GdeltArticle>> DeduplicateOutbreakAsync(List<GdeltArticle> articles, CancellationToken ct = default)
+    {
+        if (articles.Count <= 1) return articles;
+
+        var userMessage = string.Join("\n", articles.Select((a, i) => $"{i + 1}. {a.Title}"));
+
+        try
+        {
+            var response = await LmStudioClient.CallAsync(OutbreakDedupePrompt, userMessage, 64, 0.0, ct);
+            if (string.IsNullOrWhiteSpace(response)) return articles;
+
+            var kept = response
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(line => int.TryParse(line.Trim(), out var n) ? n : -1)
+                .Where(n => n >= 1 && n <= articles.Count)
+                .Distinct()
+                .OrderBy(n => n)
+                .Select(n => articles[n - 1])
+                .ToList();
+
+            return kept.Count > 0 ? kept : articles;
+        }
+        catch
+        {
+            return articles;
+        }
+    }
+
+    public static async Task<(string Headline, string[] Tags)> GenerateOutbreakPostAsync(string rawTitle, CancellationToken ct = default)
+    {
+        var fallbackTags = new[] { "Outbreak", "PublicHealth" };
+
+        try
+        {
+            var text = await LmStudioClient.CallAsync(OutbreakPostPrompt, rawTitle, 160, 0.2, ct);
+            if (string.IsNullOrEmpty(text))
+            {
+                AppLogger.Log("LM Studio error — using raw title for outbreak post.");
+                return (rawTitle, fallbackTags);
+            }
+
+            AppLogger.Log($"LM Studio outbreak response: {text.Replace('\n', '|')}");
+            var (headline, _, tags) = Parse(text, rawTitle);
+            // Parse falls back to rule-based tags when the model omits them; always lead with Outbreak.
+            var finalTags = tags.Contains("Outbreak", StringComparer.OrdinalIgnoreCase)
+                ? tags
+                : new[] { "Outbreak" }.Concat(tags).Take(4).ToArray();
+            return (headline, finalTags);
+        }
+        catch (Exception ex)
+        {
+            AppLogger.Log($"LM Studio unavailable ({ex.Message}) — using raw title for outbreak post.");
+            return (rawTitle, fallbackTags);
+        }
+    }
+
     public static async Task<(string Headline, string[] Tags)> GenerateYahooFuturesPostAsync(
         IReadOnlyList<OilPriceEntry> prices, Dictionary<string, double>? lastPostPrices = null,
         CancellationToken ct = default)

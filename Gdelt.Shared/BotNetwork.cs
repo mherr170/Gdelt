@@ -22,8 +22,11 @@ public sealed record BotNetwork(
     bool GrowthEnabled = true)
 {
     // Promo line appended to each account's pinned intro post. "{0}" is that
-    // account's own copy of the network starter-pack URL.
-    public string IntroPromoLine => $"Meet the rest of the {Name} network: {{0}}";
+    // account's own copy of the network starter-pack URL. Strips a trailing
+    // "Network" from Name so networks like "Faith Network" don't read as
+    // "Faith Network network" once " network:" is appended below.
+    public string IntroPromoLine =>
+        $"Meet the rest of the {(Name.EndsWith(" Network", StringComparison.OrdinalIgnoreCase) ? Name[..^" Network".Length] : Name)} network: {{0}}";
 }
 
 public static class BotNetworks
@@ -33,7 +36,7 @@ public static class BotNetworks
     public static readonly BotNetwork LiveWire = new(
         Slug:        "livewire",
         Name:        "Live Wire",
-        Description:  "Real-time bots tracking gas prices, quakes, gun violence, backyard birds, energy futures, and daily space photos — straight from the data.",
+        Description:  "Real-time bots tracking gas prices, quakes, gun violence, disease outbreaks, backyard birds, energy futures, and daily space photos — straight from the data.",
         Accounts:
         [
             new("gasprices",   "Gas Prices",   CredentialManager.LoadGasPriceBluesky,
@@ -50,6 +53,10 @@ public static class BotNetworks
                 "Automated tracking of US gun violence news from GDELT, filtered and LLM-verified before posting."),
             new("apod",        "APOD",         CredentialManager.LoadApodBluesky,
                 "NASA's Astronomy Picture of the Day, posted automatically every day."),
+            new("weather",     "Weather",      CredentialManager.LoadWeatherBluesky,
+                "Automated alerts for high-impact US weather events — tornadoes, hurricanes, blizzards, and tsunamis — sourced from the National Weather Service."),
+            new("outbreak",    "Outbreak Watch", CredentialManager.LoadOutbreakBluesky,
+                "Automated tracking of global disease outbreaks from health and news feeds, LLM-verified and worded with the source's certainty."),
         ]);
 
     // Religion-themed daily bots. Placeholder name/description — rename once the
@@ -80,7 +87,6 @@ public static class BotNetworks
         new("commodity",     "Commodity",       CredentialManager.LoadCommodityBluesky, ""),
         new("congress",      "Congress",        CredentialManager.LoadCongressBluesky,  ""),
         new("stock",         "Stock",           CredentialManager.LoadStockBluesky,     ""),
-        new("weather",       "Weather",         CredentialManager.LoadWeatherBluesky,   ""),
         new("streaming",     "Streaming",       CredentialManager.LoadStreamingBluesky, ""),
         new("pigsgonnablow", "Pigs Gonna Blow", CredentialManager.LoadPigsBluesky,      ""),
     ];

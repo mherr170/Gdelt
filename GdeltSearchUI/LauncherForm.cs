@@ -27,6 +27,7 @@ internal sealed class LauncherForm : Form
     private Label _blueskyMetricsStat = null!;
     private Label _streamingStat      = null!;
     private Label _pigsStat           = null!;
+    private Label _outbreakStat        = null!;
     private Label _verseStat          = null!;
     private Label _bibleInOrderStat   = null!;
     private Label _birdStat           = null!;
@@ -69,6 +70,7 @@ internal sealed class LauncherForm : Form
         RefreshBlueskyMetricsStatus();
         RefreshStreamingStatus();
         RefreshPigsStatus();
+        RefreshOutbreakStatus();
         RefreshVerseStatus();
         RefreshBibleInOrderStatus();
         RefreshBirdStatus();
@@ -95,6 +97,16 @@ internal sealed class LauncherForm : Form
         var hasCred = CredentialManager.LoadPigsBluesky() is not null;
         _pigsStat.Text      = hasCred ? "✓ Account configured — growth only" : "⚠ No Bluesky account configured";
         _pigsStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
+    }
+
+    private void RefreshOutbreakStatus()
+    {
+        var hasCred = CredentialManager.LoadOutbreakBluesky() is not null;
+        var last    = OutbreakPostTracker.GetLastPostedAt();
+        _outbreakStat.Text = hasCred
+            ? (last.HasValue ? $"✓ Last post {last.Value:MMM d, h:mm tt}" : "✓ Account configured")
+            : "⚠ No Bluesky account configured";
+        _outbreakStat.ForeColor = hasCred ? Color.FromArgb(0x4F, 0xB5, 0x6E) : Color.FromArgb(0xB8, 0x76, 0x0B);
     }
 
     private void RefreshVerseStatus()
@@ -262,7 +274,7 @@ internal sealed class LauncherForm : Form
         {
             Dock        = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount    = 16,
+            RowCount    = 17,
             Padding     = new Padding(12, 8, 12, 12),
             BackColor   = DarkTheme.Background,
         };
@@ -332,9 +344,13 @@ internal sealed class LauncherForm : Form
         _bibleInOrderStat = MakeStatLabel("");
         table.Controls.Add(_bibleInOrderStat, 1, 14);
 
-        table.Controls.Add(MakeStarterPackButton(), 0, 15);
+        table.Controls.Add(MakeOutbreakButton(), 0, 15);
+        _outbreakStat = MakeStatLabel("");
+        table.Controls.Add(_outbreakStat, 1, 15);
+
+        table.Controls.Add(MakeStarterPackButton(), 0, 16);
         _starterPackStat = MakeStatLabel("");
-        table.Controls.Add(_starterPackStat, 1, 15);
+        table.Controls.Add(_starterPackStat, 1, 16);
 
         return table;
     }
@@ -589,6 +605,21 @@ internal sealed class LauncherForm : Form
                 RefreshPigsStatus();
         };
         return _pigsBtn;
+    }
+
+    private Button MakeOutbreakButton()
+    {
+        var btn = MakeButton("Outbreak Watch", Color.FromArgb(0x8A, 0x4A, 0x2A));
+        btn.Click += (_, _) =>
+        {
+            using var dlg = new SettingsDialog(
+                CredentialManager.LoadOutbreakBluesky,
+                CredentialManager.SaveOutbreakBluesky,
+                "Bluesky Account — Outbreak Watch");
+            if (dlg.ShowDialog() == DialogResult.OK)
+                RefreshOutbreakStatus();
+        };
+        return btn;
     }
 
     private Button _birdBtn = null!;

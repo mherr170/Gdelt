@@ -390,7 +390,15 @@ internal sealed class BlueskyPoster : IDisposable
         for (int attempt = 0; attempt < maxAttempts; attempt++)
         {
             using var req = requestFactory();
-            var response = await _http.SendAsync(req, ct);
+
+            // Once createRecord is actually on the wire, a shutdown-triggered cancellation
+            // here would abort the client side without knowing whether Bluesky already
+            // committed the post — the caller would then treat it as a failure and a
+            // restarted worker would post it again, duplicating a tweet that already went
+            // out. Run this specific send to completion regardless of ct so the caller
+            // always gets a definite answer to record. `ct` still governs the retry-delay
+            // below, so a shutdown still stops us from starting a fresh attempt.
+            var response = await _http.SendAsync(req, CancellationToken.None);
 
             var status = (int)response.StatusCode;
             bool retryable = (status == 429 || status == 502) && attempt < maxAttempts - 1;

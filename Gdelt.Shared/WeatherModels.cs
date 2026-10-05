@@ -27,6 +27,14 @@ internal sealed class NwsAlertProps
     [JsonPropertyName("onset")]      public string? Onset      { get; init; }
     [JsonPropertyName("expires")]    public string? Expires    { get; init; }
     [JsonPropertyName("instruction")]public string? Instruction{ get; init; }
+    [JsonPropertyName("parameters")] public NwsAlertParameters? Parameters { get; init; }
+}
+
+internal sealed class NwsAlertParameters
+{
+    // VTEC identifies the same underlying warning across NWS updates (NEW/CON/EXT/...);
+    // the alert's own "id" changes with every update, so VTEC is what's stable.
+    [JsonPropertyName("VTEC")] public string[]? Vtec { get; init; }
 }
 
 // ── Domain record ─────────────────────────────────────────────────────────────
@@ -44,4 +52,8 @@ internal sealed record WeatherAlert
     public DateTime? Onset       { get; init; }
     public DateTime? Expires     { get; init; }
     public string?   Instruction { get; init; }
+
+    // Stable across NWS updates to the same warning (unlike Id, which changes on
+    // every update). Falls back to Id when NWS doesn't supply VTEC.
+    public string    TrackingKey { get; init; } = "";
 }
