@@ -16,7 +16,10 @@ internal static class OutbreakAutoPost
 {
     private const string W         = "outbreak";
     private const string Query     = "(outbreak OR epidemic OR pandemic OR plague OR quarantine)";
-    private const int    LookbackH = 6;
+    // Wide window: the tracker dedups by URL and headline similarity, so re-seeing a
+    // story costs nothing, while a narrow window misses stories that are only briefly
+    // in a low-volume feed. GDELT 429s nearly every cycle, so RSS has to carry this.
+    private const int    LookbackH = 24;
     private const int    MaxPerRun = 3;
 
     private static readonly string[] RssFeeds =
@@ -28,6 +31,18 @@ internal static class OutbreakAutoPost
         "https://feeds.npr.org/1128/rss.xml",
         "https://www.statnews.com/feed/",
         "https://www.ecdc.europa.eu/en/taxonomy/term/1310/feed",
+
+        // General world-news feeds: breaking outbreaks (e.g. a lab-linked death in
+        // Siberia) hit these long before the health-desk feeds above pick them up.
+        // Volume is fine — the keyword filter and LLM classifier cut it down.
+        "https://feeds.bbci.co.uk/news/world/rss.xml",
+        "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",
+        "https://www.theguardian.com/world/rss",
+        "https://www.aljazeera.com/xml/rss/all.xml",
+        "https://feeds.npr.org/1004/rss.xml",
+        "https://www.cbsnews.com/latest/rss/world",
+        "https://abcnews.go.com/abcnews/internationalheadlines",
+        "https://rss.dw.com/rdf/rss-en-all",
     ];
 
     private static readonly string[] Keywords =
