@@ -21,7 +21,13 @@ internal sealed class ApodApiClient : IDisposable
     public async Task<ApodEntry?> GetTodayAsync(CancellationToken ct = default)
     {
         var url      = $"{BaseUrl}?api_key={Uri.EscapeDataString(_apiKey)}&thumbs=true";
-        var response = await _http.GetFromJsonAsync<ApodApiResponse>(url, ct);
+        ApodApiResponse? response;
+        try { response = await _http.GetFromJsonAsync<ApodApiResponse>(url, ct); }
+        catch (HttpRequestException ex)
+        {
+            PostLogger.Warn("apod", $"APOD API failed ({ex.Message}) — trying science.nasa.gov/apod page");
+            return await ScrapeApodPageAsync(null, ct);
+        }
         if (response is null) return null;
 
         // NASA's API has been returning the site logo as the "image" (with a stale caption).
@@ -41,7 +47,15 @@ internal sealed class ApodApiClient : IDisposable
     private static readonly Regex _credit    = new(@"Credit\s*&amp;\s*Copyright</th>\s*<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex _tags      = new(@"<[^>]+>", RegexOptions.Compiled);
 
-    private async Task<ApodEntry?> ScrapeApodPageAsync(ApodApiResponse api, CancellationToken ct)
+    private static readonly Regex _desc = new(@"media-detail-hero__description"">\s*<strong>Explanation:</strong>(.*?)(?:<br|</p>)", RegexOptions.Singleline | RegexOptions.Compiled);
+
+    private static string ExplanationFrom(string html)
+    {
+        var m = _desc.Match(html);
+        return m.Success ? System.Net.WebUtility.HtmlDecode(_tags.Replace(m.Groups[1].Value, "")).Trim() : "";
+    }
+
+    private async Task<ApodEntry?> ScrapeApodPageAsync(ApodApiResponse? api, CancellationToken ct)
     {
         string html;
         try { html = await _http.GetStringAsync("https://science.nasa.gov/apod/", ct); }
@@ -67,9 +81,9 @@ internal sealed class ApodApiClient : IDisposable
         PostLogger.Info("apod", "API returned NASA logo placeholder — using science.nasa.gov/apod page instead");
         return new ApodEntry
         {
-            Date        = api.Date ?? DateTime.Now.ToString("yyyy-MM-dd"),
+            Date        = api?.Date ?? DateTime.Now.ToString("yyyy-MM-dd"),
             Title       = Clean(title.Groups[1].Value),
-            Explanation = api.Explanation ?? "",
+            Explanation = api?.Explanation ?? ExplanationFrom(html),
             ImageUrl    = System.Net.WebUtility.HtmlDecode(img.Groups[1].Value),
             Copyright   = string.IsNullOrWhiteSpace(copyright) ? null : copyright,
             IsVideo     = false,
