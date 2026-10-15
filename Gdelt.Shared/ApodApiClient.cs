@@ -22,7 +22,58 @@ internal sealed class ApodApiClient : IDisposable
     {
         var url      = $"{BaseUrl}?api_key={Uri.EscapeDataString(_apiKey)}&thumbs=true";
         var response = await _http.GetFromJsonAsync<ApodApiResponse>(url, ct);
-        return response is null ? null : Map(response);
+        if (response is null) return null;
+
+        // NASA's API has been returning the site logo as the "image" (with a stale caption).
+        // Never post that — fall back to the real APOD page, or give up so nothing is posted.
+        if (IsPlaceholder(response))
+            return await ScrapeApodPageAsync(response, ct);
+
+        return Map(response);
+    }
+
+    private static bool IsPlaceholder(ApodApiResponse r) =>
+        (r.Url ?? "").Contains("nasa-logo", StringComparison.OrdinalIgnoreCase) ||
+        (r.HdUrl ?? "").Contains("nasa-logo", StringComparison.OrdinalIgnoreCase);
+
+    private static readonly Regex _heroImg   = new(@"class=""media-detail-hero__media[^""]*"">.*?<img[^>]+src=""([^""]+)""", RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex _heroTitle = new(@"</figure>.*?<h2[^>]*>(.*?)</h2>", RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex _credit    = new(@"Credit\s*&amp;\s*Copyright</th>\s*<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex _tags      = new(@"<[^>]+>", RegexOptions.Compiled);
+
+    private async Task<ApodEntry?> ScrapeApodPageAsync(ApodApiResponse api, CancellationToken ct)
+    {
+        string html;
+        try { html = await _http.GetStringAsync("https://science.nasa.gov/apod/", ct); }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            PostLogger.Warn("apod", $"API returned NASA logo placeholder and APOD page fetch failed: {ex.Message}");
+            return null;
+        }
+
+        var img   = _heroImg.Match(html);
+        var title = _heroTitle.Match(html);
+        if (!img.Success || !title.Success)
+        {
+            PostLogger.Warn("apod", "API returned NASA logo placeholder and APOD page could not be parsed");
+            return null;
+        }
+
+        static string Clean(string h) => System.Net.WebUtility.HtmlDecode(_tags.Replace(h, "")).Trim();
+
+        var credit = _credit.Match(html);
+        var copyright = credit.Success ? Clean(credit.Groups[1].Value) : null;
+
+        PostLogger.Info("apod", "API returned NASA logo placeholder — using science.nasa.gov/apod page instead");
+        return new ApodEntry
+        {
+            Date        = api.Date ?? DateTime.Now.ToString("yyyy-MM-dd"),
+            Title       = Clean(title.Groups[1].Value),
+            Explanation = api.Explanation ?? "",
+            ImageUrl    = System.Net.WebUtility.HtmlDecode(img.Groups[1].Value),
+            Copyright   = string.IsNullOrWhiteSpace(copyright) ? null : copyright,
+            IsVideo     = false,
+        };
     }
 
     private static readonly Regex _ytEmbed = new(@"youtube\.com/embed/([^?&/]+)", RegexOptions.Compiled);
