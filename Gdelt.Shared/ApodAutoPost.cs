@@ -2,7 +2,9 @@ using SkiaSharp;
 
 namespace GdeltSearchUI;
 
-internal enum ApodAutoPostOutcome { Posted, AlreadyPosted, MissingCredentials, MissingApiKey, Failed }
+// NasaUnavailable: NASA's API and APOD page were both down after retries — transient,
+// the next tick will try again, so it's reported as a warning rather than a failure.
+internal enum ApodAutoPostOutcome { Posted, AlreadyPosted, MissingCredentials, MissingApiKey, NasaUnavailable, Failed }
 
 internal sealed record ApodAutoPostResult(
     ApodAutoPostOutcome Outcome,
@@ -31,6 +33,11 @@ internal static class ApodAutoPost
             entry = await client.GetTodayAsync(ct);
         }
         catch (OperationCanceledException) { throw; }
+        catch (ApodUnavailableException ex)
+        {
+            PostLogger.Warn(W, $"{ex.Message} — will retry next tick");
+            return new(ApodAutoPostOutcome.NasaUnavailable, ErrorMessage: ex.Message);
+        }
         catch (Exception ex)
         {
             PostLogger.Error(W, $"Fetch failed: {ex.Message}");

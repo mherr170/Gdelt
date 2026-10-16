@@ -24,9 +24,11 @@ internal sealed class ApodAutoPostWorker : PeriodicAutoPostWorker
         {
             case ApodAutoPostOutcome.Posted:
                 Logger.LogInformation("APOD: posted for {Date}", result.Date);
+                TrackTickOutcome(true);
                 break;
             case ApodAutoPostOutcome.AlreadyPosted:
                 Logger.LogInformation("APOD: already posted for {Date}, skipping", result.Date);
+                TrackTickOutcome(true);
                 break;
             case ApodAutoPostOutcome.MissingApiKey:
                 if (!_warnedMissingKey)
@@ -42,8 +44,15 @@ internal sealed class ApodAutoPostWorker : PeriodicAutoPostWorker
                     _warnedMissingCreds = true;
                 }
                 break;
+            case ApodAutoPostOutcome.NasaUnavailable:
+                // Transient NASA outage: warn and let the next hourly tick retry.
+                // TrackTickOutcome escalates to a STUCK warning only if it persists.
+                Logger.LogWarning("APOD: NASA unavailable — {Error}", result.ErrorMessage);
+                TrackTickOutcome(false, result.ErrorMessage ?? "NASA unavailable");
+                break;
             case ApodAutoPostOutcome.Failed:
                 Logger.LogError("APOD: post failed — {Error}", result.ErrorMessage);
+                TrackTickOutcome(false, $"{result.Date ?? "fetch"} — {result.ErrorMessage}");
                 break;
         }
     }
