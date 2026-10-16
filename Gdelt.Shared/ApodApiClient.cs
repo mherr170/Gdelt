@@ -115,9 +115,13 @@ internal sealed class ApodApiClient : IDisposable
         (r.Url ?? "").Contains("nasa-logo", StringComparison.OrdinalIgnoreCase) ||
         (r.HdUrl ?? "").Contains("nasa-logo", StringComparison.OrdinalIgnoreCase);
 
-    private static readonly Regex _heroImg   = new(@"class=""media-detail-hero__media[^""]*"">.*?<img[^>]+src=""([^""]+)""", RegexOptions.Singleline | RegexOptions.Compiled);
-    private static readonly Regex _heroTitle = new(@"</figure>.*?<h2[^>]*>(.*?)</h2>", RegexOptions.Singleline | RegexOptions.Compiled);
-    private static readonly Regex _credit    = new(@"Credit\s*&amp;\s*Copyright</th>\s*<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.Compiled);
+    // The hero block runs from the media div to the title <h2> right after it. Matching inside it
+    // keeps the image/video lookups from wandering into the rest of the page on video days.
+    private static readonly Regex _hero      = new(@"class=""media-detail-hero__media[^""]*"">(.*?)<h2[^>]*>(.*?)</h2>", RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex _heroImg   = new(@"<img[^>]+src=""([^""]+)""", RegexOptions.Compiled);
+    private static readonly Regex _heroVideo = new(@"<source[^>]+src=""([^""]+)""|<iframe[^>]+src=""([^""]*youtube[^""]+)""", RegexOptions.Compiled);
+    private static readonly Regex _heroDate  = new(@">Date</th>\s*<td[^>]*>\s*(.*?)\s*</td>", RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex _credit    = new(@"Credit(?:\s*&amp;\s*Copyright)?:?</th>\s*<td[^>]*>(.*?)</td>", RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex _tags      = new(@"<[^>]+>", RegexOptions.Compiled);
 
     private static readonly Regex _desc = new(@"media-detail-hero__description"">\s*<strong>Explanation:</strong>(.*?)(?:<br|</p>)", RegexOptions.Singleline | RegexOptions.Compiled);
@@ -139,29 +143,57 @@ internal sealed class ApodApiClient : IDisposable
             return null;
         }
 
-        var img   = _heroImg.Match(html);
-        var title = _heroTitle.Match(html);
-        if (!img.Success || !title.Success)
+        static string Clean(string h) => System.Net.WebUtility.HtmlDecode(_tags.Replace(h, "")).Trim();
+
+        var hero  = _hero.Match(html);
+        var media = hero.Success ? hero.Groups[1].Value : "";
+        var img   = _heroImg.Match(media);
+        var video = img.Success ? Match.Empty : _heroVideo.Match(media);
+        if (!hero.Success || (!img.Success && !video.Success))
         {
             PostLogger.Warn("apod", $"{why} and APOD page could not be parsed");
             return null;
         }
 
-        static string Clean(string h) => System.Net.WebUtility.HtmlDecode(_tags.Replace(h, "")).Trim();
-
         var credit = _credit.Match(html);
         var copyright = credit.Success ? Clean(credit.Groups[1].Value) : null;
+        var date = api?.Date ?? PageDate(html);
+
+        string? imageUrl = null, videoUrl = null;
+        if (img.Success)
+            imageUrl = System.Net.WebUtility.HtmlDecode(img.Groups[1].Value);
+        else
+        {
+            var src = System.Net.WebUtility.HtmlDecode(video.Groups[1].Success ? video.Groups[1].Value : video.Groups[2].Value);
+            var yt  = _ytEmbed.Match(src);
+            // YouTube gets a watch link and its thumbnail. NASA-hosted mp4s have no thumbnail and the
+            // APOD pages have no dated permalink (apod.nasa.gov/apod/apYYMMDD.html redirects to today's),
+            // so link the mp4 itself, which stays valid and plays in any browser.
+            videoUrl = yt.Success ? ToWatchUrl(src) : src;
+            imageUrl = yt.Success ? $"https://img.youtube.com/vi/{yt.Groups[1].Value}/hqdefault.jpg" : null;
+        }
 
         PostLogger.Info("apod", $"{why} — using science.nasa.gov/apod page instead");
         return new ApodEntry
         {
-            Date        = api?.Date ?? DateTime.Now.ToString("yyyy-MM-dd"),
-            Title       = Clean(title.Groups[1].Value),
+            Date        = date,
+            Title       = Clean(hero.Groups[2].Value),
             Explanation = api?.Explanation ?? ExplanationFrom(html),
-            ImageUrl    = System.Net.WebUtility.HtmlDecode(img.Groups[1].Value),
+            ImageUrl    = imageUrl,
+            VideoUrl    = videoUrl,
             Copyright   = string.IsNullOrWhiteSpace(copyright) ? null : copyright,
-            IsVideo     = false,
+            IsVideo     = !img.Success,
         };
+    }
+
+    // The page's own "Date" row (e.g. "October 16, 2026"); falls back to today's local date.
+    private static string PageDate(string html)
+    {
+        var m = _heroDate.Match(html);
+        return m.Success && DateTime.TryParse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture,
+                   System.Globalization.DateTimeStyles.None, out var d)
+            ? d.ToString("yyyy-MM-dd")
+            : DateTime.Now.ToString("yyyy-MM-dd");
     }
 
     private static readonly Regex _ytEmbed = new(@"youtube\.com/embed/([^?&/]+)", RegexOptions.Compiled);
