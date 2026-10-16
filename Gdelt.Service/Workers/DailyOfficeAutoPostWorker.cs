@@ -5,7 +5,9 @@ namespace Gdelt.Service.Workers;
 // "The Daily Office" — fires hourly. Posts Morning Prayer once per day at/after
 // 07:00 and Evening Prayer once per day at/after 18:00. PostIfNeededAsync's own
 // per-day slot guards make extra ticks safe no-ops; at most one office goes out
-// per tick so the two never land back-to-back after a midday start.
+// per tick so the two never land back-to-back after a midday start. A Morning
+// office that is still unposted once Evening is due is skipped for the day
+// rather than going out after dark.
 internal sealed class DailyOfficeAutoPostWorker : PeriodicAutoPostWorker
 {
     private static readonly TimeOnly MorningAfter = new(7, 0);
@@ -21,7 +23,7 @@ internal sealed class DailyOfficeAutoPostWorker : PeriodicAutoPostWorker
         var nowT = TimeOnly.FromDateTime(DateTime.Now);
         var postedThisTick = false;
 
-        if (nowT >= MorningAfter)
+        if (nowT >= MorningAfter && nowT < EveningAfter)
             postedThisTick = await TryPost(Office.Morning, ct);
 
         if (!postedThisTick && nowT >= EveningAfter)
